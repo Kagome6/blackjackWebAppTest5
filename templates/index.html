@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Blackjack</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!--
+    <div id="mode-selection">
+        <button id="learn-button"><img src="{{ url_for('static', filename='images/learn_button.png') }}" alt="学習 Phase1"></button>
+        <button id="learn2-button"><img src="{{ url_for('static', filename='images/nextlearn_button.png') }}" alt="学習 Phase2"></button>
+    </div>
+    -->
+
+    <div id="play-selection">
+        
+        <button id="play-button"><img src="{{ url_for('static', filename='images/play_button.png') }}" alt="プレイ"></button>
+    </div>
+
+    <!-- サイトの注意メッセージ -->
+    <div id="warning-message" class="warning">
+        これは実験用です。AIのターンで2連続引いてしまうなど、正常な挙動をしないことが確認できています
+    </div>
+
+    <!-- 注意メッセージ2 -->
+    <div id="warningtwo-message" class="warningtwo">
+        管理者の許可およびメンテナンスがない限り、「学習ボタン」は表示されません。
+    </div>
+
+    <!-- ブラックジャック(21)の基本ルール説明 -->
+    <div id="rules-section">
+        <h2>このサイトでの、ブラックジャック(21)の基本ルール</h2>
+        <p>
+            ・カードは1～11まであり、合計が21に近いほうが勝ちです。<br>
+            ・山札は共通です。つまり、1度引いた(引かれた)カードはもう1度出てくることはありません。<br>
+            ・どちらかのプレイヤーの手札合計が21を超えるとバースト（負け）となります。<br>
+            ・あなたは引くか、引かないかを選択して進めます。<br>
+            ・人間が先行とします。<br>
+            
+            ・両者がスタンドを3回連続選んだ時点で勝敗判定します。<br>
+            ・本サイトではAI挙動が不安定な部分がありますが、あくまで実験用となります。<br>
+            ・AIはQテーブル方式です。事前学習された確率に基づき場の状況を見ながら引くか引かないかを決めます。<br>
+
+            ──2025-03-26以降の実験的更新──<br>
+            試合中にポイントを賭けるシステムを追加しました。勝てそうなら「SPカード」を使用し、相手の命を減らすことができます。<br>
+            また試合中AI側の手札表示で”初期カードだけを試合終了まで隠す”ように変更しました。<br>
+        </p>
+    </div>
+
+    <!-- その他説明 -->
+    <div id="ruletwo-section">
+        <h2>Python本体(AI思考部)はAlph496とGPT-4 o3-miniの共同作業で書かれました</h2>
+        <p>
+            学習時には、1段階目でルールベースのAIとQ学習が自動対戦され、2段階目で訓練済みQ学習同士が自己対戦します。<br>
+            すでに学習済みなのでそのままプレイできます。<br>
+            ローカルで動かしたい場合はGithubで公開することも考えます。<br>
+            HTML、CSS、JavaScriptもChatGPTに殆ど書かせています。<br>
+        </p>
+    </div>
+    
+    
+    <div id="game-container" style="display: none;">
+        <div id="ai-area">
+            <h2>AIの手札:</h2>
+            <div>AIのポイント: <span id="ai-points">--</span></div>
+            
+            <!-- AIのSPカード表示エリアを追加 -->
+            <div id="ai-sp-cards-area" style="font-size: 0.8em; margin-top: 5px;">
+                AI SPカード: <span id="ai-sp-card-list">なし</span>
+            </div>
+            <!--ここまで -->
+            <!-- AI宣言中表示を追加 -->
+            <div id="ai-declared-sp-card-display" style="font-weight: bold; font-size: 0.9em;">
+                AI宣言中: <span id="ai-declared-card-name">なし</span>
+            </div>
+            <!-- ここまで -->
+            
+            <div id="ai-hand"></div>
+        </div>
+
+        <div id="player-area">
+            <h2>あなたの手札:</h2>
+            <div>あなたのポイント: <span id="player-points">--</span></div>
+            <div id="player-sp-cards-area">
+                <h3>SPカード:</h3>
+                <!-- 宣言中カード表示 -->
+                <div id="declared-sp-card-display" style="margin-bottom: 5px; font-weight: bold;">
+                    宣言中: <span id="declared-card-name">なし</span>
+                </div>
+                <!-- 宣言中カード表示 -->
+                <div id="sp-card-list">
+                    <!-- (既存のリスト表示部分) -->
+                    <p>なし</p>
+                </div>
+            </div>
+            <div id="player-hand"></div>
+        </div>
+
+        <div id="buttons">
+            <!-- 終了ボタンを追加(完全リセット-プレイモード画面に戻る) -->
+            <button id="reset-all-button" style="margin-bottom: 20px;"> <!-- 上下の間隔調整 -->
+                <img src="{{ url_for('static', filename='images/end_button.png') }}" alt="終了してリセット">
+                <!-- 画像サイズは適宜調整 -->
+            </button>
+            <!-- ここまで -->
+            <button id="hit-button">
+                <img src="{{ url_for('static', filename='images/hit_button.png') }}" alt="ヒット">
+            </button>
+            <button id="stand-button">
+                <img src="{{ url_for('static', filename='images/stand_button.png') }}" alt="スタンド">
+            </button>
+        </div>
+
+        <!-- メッセージログ表示エリア -->
+        <div id="message-log"></div>
+
+        <div id="end-game" style="display: none;">
+            <!-- 終了ではなくゲームを続ける -->
+            <button id="next-game-button">
+                <img src="{{ url_for('static', filename='images/next_game_button.png') }}" alt="次のゲームへ">
+            </button>
+            <!-- ここまで -->
+        </div>
+
+    </div>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>

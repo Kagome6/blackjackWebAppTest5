@@ -1,0 +1,227 @@
+/* カードの共通スタイル */
+.card {
+    width: 130px;
+    height: 180px;
+    border: 1px solid black;
+    display: inline-block;
+    margin: 5px;
+    background-size: cover;
+    background-position: center;
+}
+
+/* プレイヤーの手札 */
+#player-area {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    width: 80%;
+}
+
+#player-hand .card {
+    background-color: #f0fff0;
+}
+
+/* AIの手札 */
+#ai-area {
+    position: fixed;
+    top: 20px; /* 既存の top の値はそのままでもよい場合 */
+    left: 20px;
+    width: 80%;
+    margin-top: 200px;  /* 60px 分下げる */
+}
+
+#ai-hand .card {
+    background-color: #f0f8ff;
+}
+
+/* ゲーム中の操作ボタン */
+#buttons {
+    position: fixed;
+    top: 50%;
+    right: 20px;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+}
+
+#buttons button {
+    margin-bottom: 20px;
+    font-size: 30px;   
+    padding: 5px 10px;
+
+}
+
+/* 画像サイズ設定 */
+/* 既存のルールから #buttons img を分離する */
+#mode-selection img, #end-game img, #play-selection img {
+    width: 390px; /* 他のエリアの画像サイズ */
+}
+
+/* ヒット/スタンドボタンの画像サイズ */
+#buttons #hit-button img,
+#buttons #stand-button img {
+    width: 390px;
+}
+
+/* 終了ボタンの画像サイズを個別指定 */
+#buttons #reset-all-button img {
+    width: 450px; /* または希望の小さいサイズ */
+    height: auto; /* 縦横比を維持 */
+}
+
+/* 学習モード選択ボタン群 */
+#mode-selection {
+    text-align: center;
+    margin-top: 50px;
+}
+
+/* プレイモード選択ボタン */
+#play-selection {
+    position: fixed;
+    bottom: 20px;      /* 画面下から20px上 */
+    left: 50%;         /* 横方向は中央 */
+    transform: translateX(-50%);
+    text-align: center;
+}
+
+#mode-selection button {
+    margin: 10px;
+    padding: 5px;
+    border: none;
+    background-color: transparent;
+    cursor: pointer;
+}
+
+/* 注意メッセージ（赤文字） */
+.warning {
+    color: red;
+    font-weight: bold;
+    text-align: center;
+    margin-top: 20px;
+}
+
+/* 注意メッセージ（青文字） */
+.warningtwo {
+    color: rgb(64, 123, 233);
+    font-weight: bold;
+    text-align: center;
+    margin-top: 20px;
+}
+
+/* ルール説明用 */
+#rules-section {
+    width: 80%;
+    margin: 20px auto;
+    background: #fafafa;
+    border: 1px solid #ccc;
+    padding: 15px;
+    font-size: 16px;
+}
+#rules-section h2 {
+    margin-top: 0;
+}
+
+/* その他説明用 */
+#ruletwo-section {
+    width: 80%;
+    margin: 20px auto;
+    background: #fafafa;
+    border: 1px solid #ccc;
+    padding: 15px;
+    font-size: 16px;
+}
+#ruletwo-section h2 {
+    margin-top: 0;
+}
+
+/* メッセージログエリア */
+#message-log {
+    position: fixed;
+    top: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+    /* ↓↓↓ 高さを調整 (例: 70px) ↓↓↓ */
+    max-height: 80px; /* 2行分程度の高さに調整 */
+    /* ↑↑↑ 高さを調整 ↑↑↑ */
+    overflow-y: auto;
+    font-size: 20px;
+    background: rgba(255,255,255,0.8);
+    padding: 10px;
+    border: 1px solid #ccc;
+    box-sizing: border-box; /* paddingとborderを含めて高さを計算 */
+}
+
+/*「次のゲームへ」ボタンのエリアのスタイルを復活 */
+#end-game {
+    position: fixed;     /* 位置を固定 */
+    bottom: 240px;       /* 下からの位置 (お好みで) */
+    right: 20px;         /* 右からの位置 (元のまま) */
+    /* display: none; は JS側で制御するのでCSSでは不要 */
+}
+
+#end-game button { /* ボタン自体のスタイル (元のままで良ければ不要) */
+    margin: 0; /* 必要に応じて調整 */
+    padding: 5px;
+    border: none;
+    background-color: transparent;
+    cursor: pointer;
+}
+
+#end-game img { /* 画像サイズ (元の指定を流用) */
+    width: 390px;
+}
+
+      
+/* --- SPカード表示エリアのスタイル --- */
+
+#player-sp-cards-area {
+    margin-top: 15px; /* ポイント表示との間隔を少し空ける */
+    margin-bottom: 10px; /* 手札表示との間隔を少し空ける */
+    padding: 10px;
+    border: 1px dashed #ccc; /* 枠線をつけてエリアを分かりやすくする */
+    background-color: #f8f8f8; /* 少し背景色をつける */
+    max-width: 300px; /* 横幅を制限する (任意) */
+}
+
+#player-sp-cards-area h3 {
+    margin-top: 0;
+    margin-bottom: 5px;
+    font-size: 1em; /* 見出しのサイズ調整 */
+    border-bottom: 1px solid #eee; /* 見出しの下に線を引く */
+    padding-bottom: 3px;
+}
+
+#sp-card-list {
+    /* リスト全体のスタイル（必要に応じて） */
+}
+
+#sp-card-list p { /* 「なし」の場合のスタイル */
+    color: #888;
+    margin: 0;
+}
+
+.sp-card-item { /* 個々のSPカード表示スタイル */
+    margin-bottom: 5px; /* カード間の間隔 */
+    padding: 5px;
+    background-color: #fff; /* カードごとに背景色を変える */
+    border: 1px solid #ddd;
+    border-radius: 4px; /* 角を少し丸める */
+    font-size: 0.9em; /* 文字サイズ調整 */
+}
+
+/* --- SPカード使用ボタンのスタイル --- */
+.sp-card-item button.use-sp-button { /* クラス名を指定 */
+    margin-left: 10px;
+    padding: 2px 8px;
+    font-size: 0.8em;
+    cursor: pointer;
+    background-color: #e0e0e0; /* 少し色をつける */
+    border: 1px solid #ccc;
+    border-radius: 3px;
+}
+
+.sp-card-item button.use-sp-button:disabled { /* 無効化されたときのスタイル */
+    cursor: not-allowed;
+    opacity: 0.6;
+}
