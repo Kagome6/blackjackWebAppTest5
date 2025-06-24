@@ -497,17 +497,71 @@ standButton.addEventListener("click", async () => {
 });
 
 // --- イベントリスナーの設定 ---
+// ここはメンテナンス実行時以外はコメントアウト
 
-// 削除またはコメントアウト
-// // Phase1 学習ボタン
-// learnButton.addEventListener("click", async () => {
-//     // ... (学習処理) ...
-// });
+// Phase1 学習ボタン
+//if (learnButton) { // learnButton要素が存在する場合のみリスナーを設定
+//    learnButton.addEventListener("click", async () => {
+//        appendMessage("Phase1 学習を開始します... (時間がかかる場合があります)");
+//        learnButton.disabled = true; // 学習中はボタンを無効化
+//        learn2Button.disabled = true; // 他の学習ボタンも無効化
+//        playButton.disabled = true;   // プレイボタンも無効化
 //
-// // Phase2 学習ボタン
-// learn2Button.addEventListener("click", async () => {
-//     // ... (学習処理) ...
-// });
+//        try {
+//            const response = await fetch("/train", { method: "POST" });
+//            if (!response.ok) {
+//                const errorData = await response.json().catch(() => ({ message: "サーバーからの応答が不正です。" }));
+//                throw new Error(errorData.message || `学習サーバーエラー: ${response.status}`);
+//            }
+//            const data = await response.json();
+//            appendMessage(data.message || "Phase1 学習が完了しました。");
+//        } catch (error) {
+//            console.error("Error in Phase1 training:", error);
+//            appendMessage(`Phase1 学習エラー: ${error.message}`);
+//        } finally {
+//            learnButton.disabled = false; // 学習終了後（成功・失敗問わず）ボタンを有効化
+//            learn2Button.disabled = false;
+//           playButton.disabled = false;
+//        }
+//    });
+//} else {
+    console.warn("learn-button がHTML内に見つかりません。");
+//}
+//
+// Phase2 学習ボタン
+//if (learn2Button) { // learn2Button要素が存在する場合のみリスナーを設定
+//    learn2Button.addEventListener("click", async () => {
+//        appendMessage("Phase2 学習を開始します... (非常に時間がかかる場合があります)");
+//        learnButton.disabled = true;
+//        learn2Button.disabled = true;
+//        playButton.disabled = true;
+//
+//        try {
+//           const response = await fetch("/train2", { method: "POST" });
+//            if (!response.ok) {
+//                const errorData = await response.json().catch(() => ({ message: "サーバーからの応答が不正です。" }));
+//                throw new Error(errorData.message || `学習サーバーエラー(Phase2): ${response.status}`);
+//            }
+//            const data = await response.json();
+//            appendMessage(data.message || "Phase2 学習が完了しました。");
+//            if (data.simulation_results) {
+//                appendMessage("自己対戦シミュレーション結果:");
+//                appendMessage(`  Agent1勝利: ${data.simulation_results.agent1_win}`);
+//                appendMessage(`  Agent2勝利: ${data.simulation_results.agent2_win}`); // Python側とキーを合わせる
+//                appendMessage(`  引き分け: ${data.simulation_results.draw}`);
+//            }
+//        } catch (error) {
+//            console.error("Error in Phase2 training:", error);
+//            appendMessage(`Phase2 学習エラー: ${error.message}`);
+//        } finally {
+//            learnButton.disabled = false;
+//            learn2Button.disabled = false;
+//            playButton.disabled = false;
+//        }
+//    });
+//} else {
+//    console.warn("learn2-button がHTML内に見つかりません。");
+//}
 // ここまで
 
 
