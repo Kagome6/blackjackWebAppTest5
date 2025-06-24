@@ -166,7 +166,7 @@ def should_ai_draw_first_turn(ai_hand, opponent_hand, deck):
 
 # --- Q学習エージェント部 (0302改良版) ---
 class QLearningAgent:
-    def __init__(self, alpha=0.1, gamma=0.9, epsilon=0.3, epsilon_decay=0.99999, min_epsilon=0.01, reward_scale=1.0):
+    def __init__(self, alpha=0.1, gamma=0.9, epsilon=0.3, epsilon_decay=0.99999, min_epsilon=0.01, reward_scale=1.0, min_epsilon_for_play=0.0):
         self.q_table = {}
         self.alpha = alpha              # 学習率
         self.gamma = gamma              # 割引率
@@ -174,6 +174,7 @@ class QLearningAgent:
         self.epsilon_decay = epsilon_decay  # ε減衰係数（エピソード毎に掛ける）
         self.min_epsilon = min_epsilon      # εの下限
         self.reward_scale = reward_scale    # 報酬スケーリング係数
+        self.min_epsilon_for_play = min_epsilon_for_play # プレイ時の最小探索率
 
     def get_state(self, player_total, opponent_card, deck):
         """
@@ -186,17 +187,46 @@ class QLearningAgent:
         deck_info = "_".join(deck_counts)
         return f"{player_total}_{opponent_card}_{deck_info}"
 
-    def choose_action(self, state):
+    def choose_action(self, state, current_total, is_training=True):
         """
         ε-greedy によるアクション選択：
          - 未学習状態の場合、初期化後ランダム選択（"hit" と "stand" のどちらか）
          - εの確率でランダムに行動を選択し、それ以外はQ値最大の行動を返す
+         - current_total: 現在の手札の合計値
+         - is_training: 学習モードであればTrue、プレイモードであればFalse
         """
+        # --- バースト防止追加 ---
+        if current_total == BURST_LIMIT: # 既に21の場合
+            return "stand"
+        if current_total > BURST_LIMIT: # 既にバーストしている場合
+            # この状況は通常発生しないはずだが、安全策として
+            return "stand" 
+        # --- ここまで ---
+
+        # 合計が8以下の場合はほぼ無条件でヒットさせる
+        LOW_TOTAL_THRESHOLD = 8 # この閾値は調整可能
+        if current_total <= LOW_TOTAL_THRESHOLD:
+            return "hit" 
+        
+        # 状態が未学習の場合、Qテーブルに初期化
         if state not in self.q_table:
             self.q_table[state] = {"hit": 0.0, "stand": 0.0}
-        if random.uniform(0, 1) < self.epsilon:
+        
+        # 使用するepsilonを決定
+        current_epsilon_to_use = 0 # 初期値
+        if is_training:
+            current_epsilon_to_use = self.epsilon # 学習中は現在のepsilonを使用
+        else:
+            current_epsilon_to_use = self.min_epsilon_for_play # プレイ中は固定の最小値を使用
+
+        # ε-greedy の探索部分でも、21ならスタンドを優先する (より安全に)
+        if random.uniform(0, 1) < current_epsilon_to_use:
             return random.choice(["hit", "stand"])
-        return max(self.q_table[state], key=self.q_table[state].get)
+        else:
+            # Q値が最大の行動を選択
+            return max(self.q_table[state], key=self.q_table[state].get)
+    
+
 
     def learn(self, state, action, reward, next_state):
         """
@@ -231,154 +261,374 @@ class QLearningAgent:
 
 
 # --- 学習モード Phase1: OmegaAI vs Q学習 ---
-def train_phase1(agent, episodes=2000000):
+def train_phase1(agent, episodes=500000):
     max_iterations = 50  # 1ゲームあたりの最大ラウンド数
     for episode in range(episodes):
         deck = shuffle_deck()
-        # 初期カード：QエージェントとOmegaAIに1枚ずつ配布
+        
+        # 初期カード配布
+        # 最低2枚のカードがデッキにあることを保証 (q_hand, opponent_hand に1枚ずつ)
+        if len(deck) < 2:
+            print(f"エピソード {episode + 1} スキップ: デッキのカードが不足しています。")
+            continue
         q_hand = [deck.pop()]
         opponent_hand = [deck.pop()]
-        player_stand_count = 0
-        ai_stand_count = 0
-        iteration = 0
-        state = None
-        action = None
-        prev_total = calculate_total(q_hand)
+        
+        q_agent_stand_count = 0  # Qエージェントの連続スタンド回数
+        omega_ai_stand_count = 0 # OmegaAIの連続スタンド回数
+        # consecutive_both_stand = 0 # 両者が連続でスタンドした回数をカウントする場合
 
-        while iteration < max_iterations:
+        iteration = 0
+        
+        # エピソード中の遷移を一時的に保持するための変数 (Qエージェントの視点)
+        last_q_agent_state = None
+        last_q_agent_action = None
+
+        game_terminated = False # ゲームが終了したかどうかのフラグ
+
+        while iteration < max_iterations and not game_terminated:
             iteration += 1
+
             # ----- Q学習エージェントのターン -----
-            q_total = calculate_total(q_hand)
-            state = agent.get_state(q_total, opponent_hand[0], deck)
-            action = agent.choose_action(state)
-            if action == "hit":
+            q_total_before_action = calculate_total(q_hand)
+            
+            # opponent_hand[0] が存在するか確認
+            opponent_up_card = opponent_hand[0] if opponent_hand else 0 # 相手の手札がなければ0など安全な値を設定
+
+            current_q_agent_state = agent.get_state(q_total_before_action, opponent_up_card, deck)
+            q_agent_action = agent.choose_action(current_q_agent_state, q_total_before_action) # is_training=True はデフォルト
+
+            # Qエージェントの行動前の状態と行動を記録
+            last_q_agent_state = current_q_agent_state
+            last_q_agent_action = q_agent_action
+
+            reward_for_q_agent = 0 # このステップでのQエージェントへの即時報酬
+
+            if q_agent_action == "hit":
+                q_agent_stand_count = 0 
                 if deck:
                     q_hand.append(deck.pop())
-                player_stand_count = 0
-                new_total = calculate_total(q_hand)
-                intermediate_reward = compute_intermediate_reward(q_total, new_total)
-                agent.learn(state, action, intermediate_reward, None)
-                q_total = new_total
-                if q_total > BURST_LIMIT:
-                    agent.learn(state, action, -10, None)
-                    break  # ゲーム終了（バースト）
-                prev_total = q_total
-            else:
-                player_stand_count += 1
+                    new_q_total = calculate_total(q_hand)
+                    # compute_intermediate_reward の値を少し大きくする案
+                    # reward_for_q_agent = compute_intermediate_reward(q_total_before_action, new_q_total) 
+                    # 例えば、ここで compute_intermediate_reward の代わりに直接値を設定するか、
+                    # compute_intermediate_reward の実装自体を変更する。
+                    # 例: ヒット成功で +0.2 や +0.5 など (compute_intermediate_reward を変更しないなら)
+                    if new_q_total > q_total_before_action and new_q_total <= BURST_LIMIT:
+                        reward_for_q_agent = 0.2 # ヒット成功報酬を少し上げる例
+                    else:
+                        reward_for_q_agent = compute_intermediate_reward(q_total_before_action, new_q_total) # 元のままか、0か
+                    
+                    if new_q_total > BURST_LIMIT:
+                        reward_for_q_agent += -10 
+                        agent.learn(last_q_agent_state, last_q_agent_action, reward_for_q_agent, None) 
+                        game_terminated = True
+                else:
+                    q_agent_action = "stand" 
+                    last_q_agent_action = "stand" 
+                    q_agent_stand_count += 1 
+                    # デッキ切れでヒットできなかった場合、スタンド扱い。
+                    # ここでも低い手札ならペナルティを検討
+                    if q_total_before_action < 8: # 例
+                         reward_for_q_agent -= 0.1 # 小さなペナルティ
+            
+            else: # Qエージェントがスタンド
+                q_agent_stand_count += 1
+                reward_for_q_agent = 0 # スタンド自体の基本報酬は0
+                
+                # 「低い手札でスタンドした場合のペナルティ」を追加
+                LOW_HAND_STAND_THRESHOLD = 8 # 例
+                if q_total_before_action < LOW_HAND_STAND_THRESHOLD:
+                    reward_for_q_agent -= 0.2 # 小さな負の報酬 (値は調整可能)
+                    # print(f"DEBUG: QAgent stood with low hand ({q_total_before_action}), penalty: -0.2")
+                # ここまで
+
+            if game_terminated: 
+                agent.decay_epsilon() 
+                continue
 
             # ----- OmegaAI のターン -----
-            opponent_total = calculate_total(opponent_hand)
-            if iteration == 1:
-                ai_action = "hit" if should_ai_draw_first_turn(opponent_hand, q_hand, deck) else "stand"
-            else:
-                ai_action = "hit" if should_ai_draw(opponent_hand, q_hand, deck) else "stand"
-            if ai_action == "hit":
+            omega_ai_total_before_action = calculate_total(opponent_hand)
+            q_agent_current_total_for_omega = calculate_total(q_hand) # OmegaAIから見たQエージェントの合計
+
+            # OmegaAIの行動決定 (should_ai_draw_first_turn と should_ai_draw を使用)
+            # opponent_hand が空でないことを確認
+            omega_ai_action = "stand" # デフォルト
+            if opponent_hand:
+                if iteration == 1: # 初手かどうかは iteration で判断
+                    omega_ai_action = "hit" if should_ai_draw_first_turn(opponent_hand, q_hand, deck) else "stand"
+                else:
+                    omega_ai_action = "hit" if should_ai_draw(opponent_hand, q_hand, deck) else "stand"
+            
+            if omega_ai_action == "hit":
+                omega_ai_stand_count = 0 # ヒットしたらスタンドカウントリセット
                 if deck:
                     opponent_hand.append(deck.pop())
-                ai_stand_count = 0
-                opponent_total = calculate_total(opponent_hand)
-                if opponent_total > BURST_LIMIT:
-                    # OmegaAIがバーストした場合、Qエージェントへ報酬を与える
-                    reward = 10 + (BURST_LIMIT - calculate_total(q_hand))
-                    agent.learn(state, action, reward, None)
-                    break  # ゲーム終了
-            else:
-                ai_stand_count += 1
+                    new_omega_ai_total = calculate_total(opponent_hand)
+                    if new_omega_ai_total > BURST_LIMIT:
+                        # OmegaAIがバースト。Qエージェントに大きな正の報酬。
+                        # Qエージェントの最後の状態・行動に対して学習
+                        final_reward_for_q_burst_opponent = 10 + (BURST_LIMIT - q_agent_current_total_for_omega if q_agent_current_total_for_omega <= BURST_LIMIT else 0)
+                        reward_for_q_agent += final_reward_for_q_burst_opponent # ここまでの報酬に加算
+                        agent.learn(last_q_agent_state, last_q_agent_action, reward_for_q_agent, None) # 終端状態
+                        game_terminated = True
+                        # print(f"Debug E{episode+1}-I{iteration}: OmegaAI burst. R_Q={reward_for_q_agent}")
+                else:
+                    # OmegaAIがヒットしたかったがデッキ切れ。
+                    # OmegaAIはスタンドしたのと同じ扱い。
+                    omega_ai_action = "stand" # 行動をスタンドとして扱う
+                    omega_ai_stand_count += 1
+            else: # OmegaAIがスタンド
+                omega_ai_stand_count += 1
+
+            if game_terminated: # OmegaAIがバーストしてゲーム終了した場合
+                agent.decay_epsilon() # エピソード終了
+                continue # 次のエピソードへ
 
             # ----- 両者の連続スタンドチェック -----
-            if ai_stand_count >= 3:
-                final_reward = compute_final_reward(q_total, opponent_total)
-                agent.learn(state, action, final_reward, None)
-                break
+            # ルール: 「両者がスタンドを3回連続選んだ時点で勝敗判定」
+            # ここでは、各プレイヤーがそれぞれ3回連続スタンドしたら、という解釈で実装を試みる。
+            # もし「プレイヤーAスタンド→AIスタンド」を1セットとして3セット連続なら、別のカウンターが必要。
+            # 今回は「Qエージェントが3連続スタンド OR OmegaAIが3連続スタンド」でゲーム終了とする。
+            # より厳密には「Qエージェントがスタンドし、かつOmegaAIもスタンドした」という状況が
+            # 3回連続した場合、というカウンター (consecutive_both_stand) を使うのがルールの趣旨に近い。
+            # ここでは、どちらかが3回連続スタンドしたら、次の相手の判断を待たずに終了させるか、
+            # あるいは、そのターンの両者の行動を見てから判断するか。
+            # 今回は、シンプルにどちらかのスタンドカウントが3に達したら終了とする。
+            if q_agent_stand_count >= 3 or omega_ai_stand_count >= 3:
+                # 決着。Qエージェントの最後の状態・行動に対して最終報酬で学習。
+                final_reward_val = compute_final_reward(calculate_total(q_hand), calculate_total(opponent_hand))
+                reward_for_q_agent += final_reward_val # ここまでの報酬に加算
+                agent.learn(last_q_agent_state, last_q_agent_action, reward_for_q_agent, None) # 終端状態
+                game_terminated = True
+                # print(f"Debug E{episode+1}-I{iteration}: Stand決着. R_Q={reward_for_q_agent}")
+                agent.decay_epsilon() # エピソード終了
+                continue # 次のエピソードへ
 
-        agent.decay_epsilon()  # 各エピソード終了毎にεを減衰
+            # ----- ゲームが継続する場合のQ学習エージェントの学習 -----
+            # Qエージェントの行動後、OmegaAIの行動があり、ゲームがまだ終了していない場合
+            # Qエージェントの次の状態 s' を観測し、Q(s,a) を更新する。
+            # 次の状態 s' は、OmegaAIの行動後の盤面。
+            if last_q_agent_state and last_q_agent_action and not game_terminated:
+                q_total_after_omega_turn = calculate_total(q_hand) # OmegaAIの行動でQの手札は変わらない
+                opponent_up_card_after_omega_turn = opponent_hand[0] if opponent_hand else 0 # OmegaAIのヒットで変わりうる
+                
+                next_q_agent_state = agent.get_state(q_total_after_omega_turn, opponent_up_card_after_omega_turn, deck)
+                agent.learn(last_q_agent_state, last_q_agent_action, reward_for_q_agent, next_q_agent_state)
+                # print(f"Debug E{episode+1}-I{iteration}: QAgent step learn. R={reward_for_q_agent}, S={last_q_agent_state}, A={last_q_agent_action}, S'={next_q_agent_state}")
+
+        # ループが最大反復回数に達して終了した場合 (通常はバーストかスタンドで終わるはず)
+        if not game_terminated:
+            # この場合も何らかの最終報酬で学習させるべき
+            final_reward_val = compute_final_reward(calculate_total(q_hand), calculate_total(opponent_hand))
+            reward_for_q_agent += final_reward_val
+            agent.learn(last_q_agent_state, last_q_agent_action, reward_for_q_agent, None) # 終端状態として学習
+            game_terminated = True # 明示的に終了
+            # print(f"Debug E{episode+1}-I{iteration}: Max iteration. R_Q={reward_for_q_agent}")
+            agent.decay_epsilon() # エピソード終了
+
         if (episode + 1) % 500 == 0:
-            print(f"Phase1: {episode + 1}エピソード終了")
+            print(f"Phase1: {episode + 1}/{episodes} エピソード終了, ε: {agent.epsilon:.4f}")
+            
     agent.save("q_table.json")
 
 
 # --- 学習モード Phase2: Q学習 vs Q学習 ---
-def simulate_q_vs_q(agent, episodes=1000000):
+def simulate_q_vs_q(agent, episodes=2000000): # episodesは元の値に戻しました
     max_iterations = 50
     results = {"agent1_win": 0, "agent2_win": 0, "draw": 0}
-    for _ in range(episodes):
+
+    # 自己対戦では、同じエージェントインスタンス（同じQテーブル）を使って
+    # Agent1とAgent2の役割を交互に演じさせることが一般的。
+    # ここでは agent をそのまま使用します。
+
+    for episode_num in range(episodes):
         deck = shuffle_deck()
+
+        if len(deck) < 4: # 初期手札に最低4枚必要
+            # print(f"エピソード {episode_num + 1} スキップ: デッキのカードが不足しています。")
+            continue
+        
         agent1_hand = [deck.pop(), deck.pop()]
         agent2_hand = [deck.pop(), deck.pop()]
+        
         stand_count1 = 0
         stand_count2 = 0
         iteration = 0
-        # 各エージェントの状態・行動の記録リスト
-        transitions1 = []
-        transitions2 = []
         
-        while iteration < max_iterations:
+        game_terminated = False
+
+        # 各エージェントの直前の状態と行動を保持
+        last_state1, last_action1 = None, None
+        last_state2, last_action2 = None, None
+
+        while iteration < max_iterations and not game_terminated:
             iteration += 1
-            # Agent1 のターン
-            total1 = calculate_total(agent1_hand)
-            state1 = agent.get_state(total1, agent2_hand[0], deck)
-            action1 = agent.choose_action(state1)
-            transitions1.append((state1, action1))
-            if action1 == "hit":
-                if deck:
-                    agent1_hand.append(deck.pop())
-                stand_count1 = 0
-            else:
-                stand_count1 += 1
-
-            # Agent2 のターン
-            total2 = calculate_total(agent2_hand)
-            state2 = agent.get_state(total2, agent1_hand[0], deck)
-            action2 = agent.choose_action(state2)
-            transitions2.append((state2, action2))
-            if action2 == "hit":
-                if deck:
-                    agent2_hand.append(deck.pop())
-                stand_count2 = 0
-            else:
-                stand_count2 += 1
-
-            if stand_count1 >= 3 or stand_count2 >= 3:
-                break
-
-        total1 = calculate_total(agent1_hand)
-        total2 = calculate_total(agent2_hand)
-        # 勝敗判定と結果の記録
-        if total1 > BURST_LIMIT and total2 > BURST_LIMIT:
-            outcome = 0  # 引き分け
-            results["draw"] += 1
-        elif total1 > BURST_LIMIT:
-            outcome = -1  # Agent2 の勝ち
-            results["agent2_win"] += 1
-        elif total2 > BURST_LIMIT:
-            outcome = 1   # Agent1 の勝ち
-            results["agent1_win"] += 1
-        else:
-            outcome = judge(total1, total2)  # 1: Agent1勝利, -1: Agent2勝利, 0: 引き分け
-            if outcome == 1:
-                results["agent1_win"] += 1
-            elif outcome == -1:
-                results["agent2_win"] += 1
-            else:
-                results["draw"] += 1
-
-        # 結果に基づく報酬設定
-        reward_agent1 = 1 if outcome == 1 else (-1 if outcome == -1 else 0)
-        reward_agent2 = 1 if outcome == -1 else (-1 if outcome == 1 else 0)
-        
-        # 記録された各遷移に対して、最終報酬を用いたQテーブルの更新（終端状態なので next_state は None）
-        for (state, action) in transitions1:
-            agent.learn(state, action, reward_agent1, None)
-        for (state, action) in transitions2:
-            agent.learn(state, action, reward_agent2, None)
             
-        agent.decay_epsilon()  # 各エピソード終了毎にεを減衰
+            # ----- Agent1 のターン -----
+            if not game_terminated:
+                total1_before_action = calculate_total(agent1_hand)
+                opponent_card_for_a1 = agent2_hand[0] if agent2_hand else 0
+                state1 = agent.get_state(total1_before_action, opponent_card_for_a1, deck)
+                action1 = agent.choose_action(state1, total1_before_action)
+
+                last_state1, last_action1 = state1, action1 # 記録
+                reward1 = 0
+
+                if action1 == "hit":
+                    stand_count1 = 0
+                    if deck:
+                        agent1_hand.append(deck.pop())
+                        new_total1 = calculate_total(agent1_hand)
+                        reward1 = compute_intermediate_reward(total1_before_action, new_total1)
+                        if new_total1 > BURST_LIMIT:
+                            reward1 += -10 # バーストペナルティ
+                            results["agent2_win"] += 1
+                            game_terminated = True
+                            # Agent1のバーストで学習
+                            agent.learn(state1, action1, reward1, None)
+                            # Agent2は勝利なので、Agent2の最後の行動に報酬を与える (もしあれば)
+                            if last_state2 and last_action2:
+                                agent.learn(last_state2, last_action2, 1, None) # 暫定的な勝利報酬
+                    else: # デッキ切れ
+                        action1 = "stand" # スタンドとして扱う
+                        last_action1 = "stand"
+                        stand_count1 += 1
+                else: # Agent1 スタンド
+                    stand_count1 += 1
+                
+                # Agent2のターンに移る前に、Agent1の学習を行う (まだゲームが終了していない場合)
+                # この学習は、Agent1の行動の結果と、Agent2の行動後の状態(next_state)を見て行われるべき
+                # しかし、Agent2の行動はまだなので、ここではAgent1の行動による即時報酬のみを考慮し、
+                # Agent2の行動後にnext_stateが決まったら再度学習する、という形にするか、
+                # あるいは、ここでは学習せず、Agent2の行動後にまとめて学習する。
+                # 今回は、Agent1の行動->Agent2の行動 という1サイクルで学習を試みる。
+                # そのため、Agent1の学習はAgent2の行動後に行う。
+
+            # ----- Agent2 のターン -----
+            if not game_terminated:
+                total2_before_action = calculate_total(agent2_hand)
+                opponent_card_for_a2 = agent1_hand[0] if agent1_hand else 0
+                state2 = agent.get_state(total2_before_action, opponent_card_for_a2, deck)
+                action2 = agent.choose_action(state2, total2_before_action)
+
+                last_state2, last_action2 = state2, action2 # 記録
+                reward2 = 0
+
+                if action2 == "hit":
+                    stand_count2 = 0
+                    if deck:
+                        agent2_hand.append(deck.pop())
+                        new_total2 = calculate_total(agent2_hand)
+                        reward2 = compute_intermediate_reward(total2_before_action, new_total2)
+                        if new_total2 > BURST_LIMIT:
+                            reward2 += -10 # バーストペナルティ
+                            results["agent1_win"] += 1
+                            game_terminated = True
+                            # Agent2のバーストで学習
+                            agent.learn(state2, action2, reward2, None)
+                            # Agent1は勝利なので、Agent1の最後の行動に報酬を与える
+                            if last_state1 and last_action1: # last_state1, last_action1がNoneでないことを確認
+                                agent.learn(last_state1, last_action1, 1, None) # 暫定的な勝利報酬
+                    else: # デッキ切れ
+                        action2 = "stand" # スタンドとして扱う
+                        last_action2 = "stand"
+                        stand_count2 += 1
+                else: # Agent2 スタンド
+                    stand_count2 += 1
+
+                # ----- 1サイクルの終了、学習の実行 -----
+                if not game_terminated:
+                    # Agent1 の学習: Agent1の行動(s1,a1) -> Agent2の行動後の状態(next_s1)
+                    if last_state1 and last_action1: # Agent1が行動していた場合
+                        total1_after_a2 = calculate_total(agent1_hand)
+                        opponent_card_for_a1_next = agent2_hand[0] if agent2_hand else 0
+                        next_state1 = agent.get_state(total1_after_a2, opponent_card_for_a1_next, deck)
+                        # reward1 は Agent1 の行動による即時報酬
+                        agent.learn(last_state1, last_action1, reward1, next_state1)
+                    
+                    # Agent2 の学習: Agent2の行動(s2,a2) -> Agent1の次の行動前の状態(next_s2)
+                    # 次のイテレーションの最初にAgent1の状態が確定するので、そこでnext_stateが決まる
+                    # ここではAgent2の行動による即時報酬のみで学習し、next_stateは次のAgent1の状態
+                    if last_state2 and last_action2: # Agent2が行動していた場合
+                        total2_after_a1_next_turn = calculate_total(agent2_hand) # A2の手札はA1の次ターン開始時も同じ
+                        opponent_card_for_a2_next = agent1_hand[0] if agent1_hand else 0 # A1の次ターン開始時のA1のカード
+                        next_state2 = agent.get_state(total2_after_a1_next_turn, opponent_card_for_a2_next, deck)
+                        # reward2 は Agent2 の行動による即時報酬
+                        agent.learn(last_state2, last_action2, reward2, next_state2)
+
+
+            # ----- 連続スタンドチェック -----
+            if not game_terminated and (stand_count1 >= 3 or stand_count2 >= 3):
+                game_terminated = True # ゲーム終了フラグを立てる
+                # この時点で決着とする (勝敗判定はループ後)
+
+        # ----- エピソード終了処理 (ループ後) -----
+        # バーストではなく、スタンド等で終了した場合の最終的な勝敗判定と報酬
+        if not (results["agent1_win"] > 0 and iteration < max_iterations and calculate_total(agent2_hand) > BURST_LIMIT) and \
+           not (results["agent2_win"] > 0 and iteration < max_iterations and calculate_total(agent1_hand) > BURST_LIMIT):
+            # 上記はバーストで既に結果が出ている場合を除外する意図だが、よりシンプルに
+            # game_terminated が True になった原因がバースト以外の場合、とするのが良い
+            
+            final_total1 = calculate_total(agent1_hand)
+            final_total2 = calculate_total(agent2_hand)
+            
+            outcome = 0 # 0: draw, 1: agent1 win, -1: agent2 win
+            # バーストの再チェック (ループ内で処理済みのはずだが念のため)
+            if final_total1 > BURST_LIMIT and final_total2 > BURST_LIMIT: outcome = 0
+            elif final_total1 > BURST_LIMIT: outcome = -1
+            elif final_total2 > BURST_LIMIT: outcome = 1
+            else: # バーストなし
+                outcome = judge(final_total1, final_total2)
+
+            # 結果をresultsに記録 (バーストですでにカウントされていなければ)
+            if outcome == 1 and not (calculate_total(agent2_hand) > BURST_LIMIT and iteration < max_iterations):
+                 results["agent1_win"] += 1
+            elif outcome == -1 and not (calculate_total(agent1_hand) > BURST_LIMIT and iteration < max_iterations):
+                 results["agent2_win"] += 1
+            elif outcome == 0 and not ((calculate_total(agent1_hand) > BURST_LIMIT or calculate_total(agent2_hand) > BURST_LIMIT) and iteration < max_iterations) :
+                 results["draw"] += 1
+            
+            # 最終的な報酬で学習 (最後の状態行動ペアに対して)
+            reward_agent1_final = 0
+            reward_agent2_final = 0
+            if outcome == 1: reward_agent1_final = 1; reward_agent2_final = -1
+            elif outcome == -1: reward_agent1_final = -1; reward_agent2_final = 1
+            
+            if last_state1 and last_action1: # Agent1の最後の行動に最終報酬
+                agent.learn(last_state1, last_action1, reward_agent1_final, None) # 終端なのでnext_stateはNone
+            if last_state2 and last_action2: # Agent2の最後の行動に最終報酬
+                agent.learn(last_state2, last_action2, reward_agent2_final, None) # 終端なのでnext_stateはNone
+
+        agent.decay_epsilon()
+        if (episode_num + 1) % 500 == 0:
+            print(f"Phase2: {episode_num + 1}/{episodes} エピソード終了, ε: {agent.epsilon:.4f}, "
+                  f"A1勝: {results['agent1_win']}, A2勝: {results['agent2_win']}, 引分: {results['draw']}")
 
     return results
 
 # --- Q学習エージェントの初期化と読み込み ---
 agent = QLearningAgent()
-agent.load()
+q_table_loaded = False # Qテーブルが正常に読み込まれたかのフラグ
+
+try:
+    # まず q_table2.json (Phase2の結果) を読み込もうと試みる
+    agent.load("q_table2.json")
+    print("INFO: q_table2.json を読み込みました。")
+    q_table_loaded = True
+except (FileNotFoundError, json.JSONDecodeError):
+    print("INFO: q_table2.json が見つからないか壊れています。q_table.json を試みます。")
+    try:
+        # q_table2.json がなければ q_table.json (Phase1の結果) を読み込む
+        agent.load("q_table.json")
+        print("INFO: q_table.json を読み込みました。")
+        q_table_loaded = True
+    except (FileNotFoundError, json.JSONDecodeError):
+        print("WARNING: q_table.json も見つからないか壊れています。新しいQテーブルで開始します。")
+        # どちらのファイルもなければ、agent.q_table は空のまま (QLearningAgentの__init__で初期化されている)
+
+if not q_table_loaded:
+    print("INFO: 有効な学習済みQテーブルが見つからなかったため、空のQテーブルで開始します。")
 
 # --- API エンドポイント ---
 @app.route("/")
@@ -719,7 +969,7 @@ def ai_turn():
         ai_total = calculate_total(session["ai_hand"])
         player_open_card = session["player_hand"][0]
         state = agent.get_state(ai_total, player_open_card, session["deck"])
-        action = agent.choose_action(state)
+        action = agent.choose_action(state, ai_total, is_training=False) 
         message = "" # メインメッセージ初期化
 
         if action == "hit": # --- AIがヒットした場合 ---
@@ -1041,7 +1291,7 @@ def train_route():
 @app.route("/train2", methods=["POST"])
 def train2_route():
     """Phase2 学習モード実行"""
-    simulation_results = simulate_q_vs_q(agent, episodes=500000)
+    simulation_results = simulate_q_vs_q(agent, episodes=2000000)
     agent.save("q_table2.json")
     return jsonify({
         "message": "Phase2 学習完了 (q_table2.json 生成)",
@@ -1075,6 +1325,6 @@ def reset_all():
     return jsonify({"message": "セッションがリセットされました。"})
 
 
-# ★★★ 最後 ★★★
+# 最後
 if __name__ == "__main__":
     app.run(debug=True)
