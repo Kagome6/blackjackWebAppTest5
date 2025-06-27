@@ -134,6 +134,24 @@
     margin-top: 0;
 }
 
+.update-highlight {
+    font-weight: bold; /* 太字 */
+    color: blue;       /* 
+    /* 他にも必要であればスタイルを追加できます */
+    /* 例: 少し目立たせるために背景色を薄くつけるなど */
+    /* background-color: #e6f7ff; */
+    /* padding: 2px 4px; */
+    /* border-radius: 3px; */
+}
+
+.text-attention-red {
+    font-weight: bold; /* 文字を太字にする */
+    color: red;       /
+    /* background-color: #e6f7ff; */
+    /* padding: 2px 4px; */
+    /* border-radius: 3px; */
+}
+
 /* メッセージログエリア */
 #message-log {
     position: fixed;
@@ -173,55 +191,70 @@
 }
 
       
-/* --- SPカード表示エリアのスタイル --- */
-
+/* --- SPカード表示エリア全体のスタイル --- */
 #player-sp-cards-area {
-    margin-top: 15px; /* ポイント表示との間隔を少し空ける */
-    margin-bottom: 10px; /* 手札表示との間隔を少し空ける */
+    margin-top: 15px;
+    margin-bottom: 10px;
     padding: 10px;
-    border: 1px dashed #ccc; /* 枠線をつけてエリアを分かりやすくする */
-    background-color: #f8f8f8; /* 少し背景色をつける */
-    max-width: 300px; /* 横幅を制限する (任意) */
+    border: 1px dashed #ccc;
+    background-color: #f8f8f8;
+    max-width: 300px; /* 任意 */
 }
 
-#player-sp-cards-area h3 {
+/* --- SPカードセクション内の見出しスタイル --- */
+#player-sp-cards-area h3 { /* 「SPカード:」という大見出し */
     margin-top: 0;
-    margin-bottom: 5px;
-    font-size: 1em; /* 見出しのサイズ調整 */
-    border-bottom: 1px solid #eee; /* 見出しの下に線を引く */
+    margin-bottom: 10px; /* h4との間隔を少し取る */
+    font-size: 1em;
+    border-bottom: 1px solid #eee;
     padding-bottom: 3px;
 }
 
-#sp-card-list {
-    /* リスト全体のスタイル（必要に応じて） */
+/* 新しいh4 (「即時発動SPカード:」「宣言型SPカード:」) のスタイル */
+#player-sp-cards-area h4 {
+    margin-top: 10px; /* 前の要素との間隔 */
+    margin-bottom: 5px;
+    font-size: 0.9em; /* h3より少し小さく */
+    color: #333; /* 文字色など */
 }
 
-#sp-card-list p { /* 「なし」の場合のスタイル */
+/* 新しいSPカードカテゴリごとのコンテナのスタイル*/
+.sp-card-category {
+    /* ここに以前 #sp-card-list にあったようなスタイルを適用可能 */
+    /* 例えば、カテゴリごとに枠線や背景を変えたい場合など */
+    /* 今回は特に指定せず、中の .sp-card-item に依存させる */
+    margin-bottom: 10px; /* カテゴリ間の余白 */
+}
+
+/* 「なし」の場合のスタイル (各カテゴリコンテナ内の p タグに適用) */
+.sp-card-category p { 
     color: #888;
     margin: 0;
+    font-style: italic; /* 少し斜体にするなど */
 }
 
-.sp-card-item { /* 個々のSPカード表示スタイル */
-    margin-bottom: 5px; /* カード間の間隔 */
+/* 個々のSPカード表示スタイル (変更なし、ただし適用範囲が新しいコンテナ内に)  */
+.sp-card-item {
+    margin-bottom: 5px;
     padding: 5px;
-    background-color: #fff; /* カードごとに背景色を変える */
+    background-color: #fff;
     border: 1px solid #ddd;
-    border-radius: 4px; /* 角を少し丸める */
-    font-size: 0.9em; /* 文字サイズ調整 */
+    border-radius: 4px;
+    font-size: 0.9em;
 }
 
-/* --- SPカード使用ボタンのスタイル --- */
-.sp-card-item button.use-sp-button { /* クラス名を指定 */
+/* SPカード使用ボタンのスタイル */
+.sp-card-item button.use-sp-button {
     margin-left: 10px;
     padding: 2px 8px;
     font-size: 0.8em;
     cursor: pointer;
-    background-color: #e0e0e0; /* 少し色をつける */
+    background-color: #e0e0e0;
     border: 1px solid #ccc;
     border-radius: 3px;
 }
 
-.sp-card-item button.use-sp-button:disabled { /* 無効化されたときのスタイル */
+.sp-card-item button.use-sp-button:disabled {
     cursor: not-allowed;
     opacity: 0.6;
 }
