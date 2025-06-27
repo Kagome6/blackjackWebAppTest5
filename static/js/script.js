@@ -1,3 +1,75 @@
+// テーマ切り替え用
+document.addEventListener('DOMContentLoaded', () => {
+    const body = document.body;
+
+    // --- 新しいトグルスイッチの制御 ---
+    const themeToggleCheckbox = document.getElementById('theme-toggle-checkbox');
+
+    // 画像要素を取得
+    const playImage = document.getElementById('play-image');           
+    const resetImage = document.getElementById('reset-image');
+    const hitImage = document.getElementById('hit-image');
+    const standImage = document.getElementById('stand-image');
+    const nextGameImage = document.getElementById('next-game-image');
+
+    // パスを直接文字列で指定する
+    const imagePaths = {
+        light: {
+            play:  '/static/images/play_button.png',                   // (ライトモード用画像)
+            reset: '/static/images/end_button.png',
+            hit:   '/static/images/hit_button.png',
+            stand: '/static/images/stand_button.png',
+            next:  '/static/images/next_game_button.png'
+        },
+        dark: {
+            play:  '/static/images/play_button_dark.png',              // (ダークモード用画像)
+            reset: '/static/images/end_button_dark.png',
+            hit:   '/static/images/hit_button_dark.png',
+            stand: '/static/images/stand_button_dark.png',
+            next:  '/static/images/next_game_button_dark.png'
+        }
+    };
+
+    // テーマを適用する関数
+    function applyTheme(theme) {
+        if (theme === 'dark') {
+            body.classList.add('dark-mode');
+            // 画像をダークモード用に変更
+            if (playImage) playImage.src = imagePaths.dark.play;
+            if (resetImage) resetImage.src = imagePaths.dark.reset;
+            if (hitImage) hitImage.src = imagePaths.dark.hit;
+            if (standImage) standImage.src = imagePaths.dark.stand;
+            if (nextGameImage) nextGameImage.src = imagePaths.dark.next;
+        } else {
+            body.classList.remove('dark-mode');
+            // 画像をライトモード用に変更
+            if (playImage) playImage.src = imagePaths.light.play;
+            if (resetImage) resetImage.src = imagePaths.light.reset;
+            if (hitImage) hitImage.src = imagePaths.light.hit;
+            if (standImage) standImage.src = imagePaths.light.stand;
+            if (nextGameImage) nextGameImage.src = imagePaths.light.next;
+        }
+    }
+
+    // --- イベントリスナーを新しいチェックボックス用に変更 ---
+    themeToggleCheckbox.addEventListener('change', () => {
+        // チェックボックスがONなら'dark'、OFFなら'light'
+        const newTheme = themeToggleCheckbox.checked ? 'dark' : 'light';
+        localStorage.setItem('theme', newTheme);
+        applyTheme(newTheme);
+    });
+
+    // --- ページ読み込み時の処理を修正 ---
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    // 保存されたテーマに合わせて、チェックボックスの初期状態をセット
+    if (savedTheme === 'dark') {
+        themeToggleCheckbox.checked = true;
+    }
+    // テーマを適用
+    applyTheme(savedTheme);
+});
+
+
 // DOM要素の取得
 // ↓↓↓メンテナンス時以外はコメントアウトしておく ↓↓↓
 //const modeSelectionDiv = document.getElementById("mode-selection");
