@@ -46,10 +46,26 @@
 
 #buttons button {
     margin-bottom: 20px;
-    font-size: 30px;   
-    padding: 5px 10px;
+    background-color: #f0f0f0; 
+    border: 1px solid #ddd;   
+    border-radius: 12px;      
+    padding: 10px;            
+    line-height: 0;           
+    cursor: pointer; /* マウスカーソルを指マークにする */
 
+    /* ▼ 以下の2行を追加 ▼ */
+    box-shadow: 3px 3px 5px rgba(0, 0, 0, 0.15); /* ボタンに少し影を付けて立体感を出す */
+    transition: all 0.08s ease-out; /* 全ての変更を0.08秒かけて滑らかに行う */
 }
+
+#buttons button:active {
+    /* クリックされたら、影を消す */
+    box-shadow: none;
+
+    /* 少し右下に動かして「押し込まれた感」を出す */
+    transform: translate(3px, 3px);
+}
+
 
 /* 画像サイズ設定 */
 /* 既存のルールから #buttons img を分離する */
@@ -132,6 +148,24 @@
 }
 #ruletwo-section h2 {
     margin-top: 0;
+}
+
+/* PLAYボタンの基本スタイル */
+#play-button {
+    /* 1. ボタン自体の背景と枠線を消して、画像を「素」の状態で見せる */
+    background: transparent;
+    border: none;
+    padding: 0; /* 余白もリセット */
+    
+    /* 2. 押した時のアニメーションを滑らかにするための準備 */
+    transition: transform 0.1s ease-out;
+    cursor: pointer; /* マウスカーソルを指マークに */
+}
+
+/* PLAYボタンがクリックされている瞬間のスタイル */
+#play-button:active {
+    /* 2. 画像を95%に少し縮小して「押した感」を出す */
+    transform: scale(0.95);
 }
 
 .update-highlight {
@@ -249,7 +283,7 @@
     padding: 2px 8px;
     font-size: 0.8em;
     cursor: pointer;
-    background-color: #e0e0e0;
+    background-color: #c0e98b;
     border: 1px solid #ccc;
     border-radius: 3px;
 }
@@ -257,4 +291,169 @@
 .sp-card-item button.use-sp-button:disabled {
     cursor: not-allowed;
     opacity: 0.6;
+}
+
+/* --- テーマ切り替えトグルスイッチのスタイル --- */
+.theme-switch-wrapper {
+    /* スイッチの位置を調整（好きな位置に固定できます） */
+    position: fixed;
+    top: 20px;
+    left: 20px; /* 右上に配置する例 */
+    z-index: 100; /* 他の要素より手前に表示 */
+}
+
+/* スイッチ全体のコンテナ */
+.theme-switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+}
+
+/* HTMLのチェックボックス本体は隠す */
+.theme-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+/* スイッチの背景（トラック）部分 */
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc; /* オフ（ライトモード）の色 */
+    transition: .4s; /* アニメーションの時間 */
+}
+
+/* スイッチの円（ツマミ）部分 */
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s; /* アニメーションの時間 */
+}
+
+/* テーマ切り替えスイッチ用アニメーションの心臓部 */
+
+/* チェックされた時（オン）のトラックの色 */
+input:checked + .slider {
+    background-color: #2d200c; /* オン（ダークモード）の色 */
+}
+
+/* チェックされた時（オン）のツマミの位置 */
+input:checked + .slider:before {
+    transform: translateX(26px); /* 右に26pxスライドさせる */
+}
+
+/* 角を丸くしてスイッチらしい見た目にする */
+.slider.round {
+    border-radius: 34px;
+}
+.slider.round:before {
+    border-radius: 50%;
+}
+
+
+/* --- ここからダークモード用スタイル --- */
+
+body.dark-mode {
+    background-color: #AFA195; /* 全体の背景色 */
+    color: black;              /* ゲーム画面の基本文字色 */
+}
+
+/* --- ゲーム画面のスタイル --- */
+
+body.dark-mode #message-log {
+    background-color: #3d2f24;
+    color: #f0f0f0; 
+    border-color: #555;
+}
+
+body.dark-mode .card {
+    background-color: #8b7d72;
+    color: white;
+    border-color: #5e524b;
+}
+
+body.dark-mode .card.hidden-card {
+    background-color: #d3d3d3;
+    color: black;
+    border-color: #aaa;
+}
+
+body.dark-mode #player-sp-cards-area {
+    background-color: #261909;
+    color: #f0f0f0;
+    border-color: #444;
+}
+
+body.dark-mode #player-sp-cards-area h3,
+body.dark-mode #player-sp-cards-area h4 {
+    color: #f0f0f0;
+    border-bottom-color: #444;
+}
+
+body.dark-mode .sp-card-item {
+    background-color: #3a3a3a;
+    border-color: #666;
+}
+
+body.dark-mode .sp-card-item button.use-sp-button {
+    background-color: #c0da9e;
+    color: #0a0a0a;
+    border-color: #777;
+}
+
+body.dark-mode #buttons {
+    background-color: #2d200c;
+    padding: 20px 10px;
+    border-radius: 10px;
+}
+
+
+/* --- ここから最初の画面のダークモード用スタイル --- */
+
+/* ルール説明エリア */
+body.dark-mode #rules-section,
+body.dark-mode #ruletwo-section {
+    background-color: #221C1A; /* 画像から取得した、より暗い背景色 */
+    color: white;              /* 指示通り、文字は白に */
+    border-color: #555;
+}
+
+/* ルール説明内の強調文字 (指定された色に) */
+body.dark-mode .update-highlight {
+    color: #b8b6d5;
+}
+body.dark-mode .text-attention-red {
+    color: #c98a8a;
+}
+
+/* サイト上部の注意メッセージ */
+body.dark-mode .warning { /* 元々赤文字だった方 */
+    color: #c0da9e; /* 淡い緑系統の色 */
+}
+body.dark-mode .warningtwo { /* 元々青文字だった方 */
+    color: #a7819a; /* 指定されたカラーコード */
+}
+
+body.dark-mode #buttons button {
+    background-color: transparent; /* 背景を透明に戻す */
+    border: none;                  /* 枠線も消す */
+    padding: 0;                    /* 余白もリセット */
+}
+
+/* ダークモードの時だけ、「引く」「引かない」ボタンの画像を少し拡大する */
+body.dark-mode #hit-button img,
+body.dark-mode #stand-button img {
+    transform: scale(1.1); /* 1.1倍（110%）に拡大 */
+    transition: transform 0.2s ease-out; /* テーマ切替時に滑らかに拡大/縮小させる */
 }
