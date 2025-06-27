@@ -12,9 +12,16 @@
     </div>
     -->
 
+    <div class="theme-switch-wrapper">
+    <label class="theme-switch" for="theme-toggle-checkbox">
+        <input type="checkbox" id="theme-toggle-checkbox" />
+        <div class="slider round"></div>
+    </label>
+    </div>
+
     <div id="play-selection">
         
-        <button id="play-button"><img src="{{ url_for('static', filename='images/play_button.png') }}" alt="プレイ"></button>
+        <button id="play-button"><img id="play-image" src="{{ url_for('static', filename='images/play_button.png') }}" alt="プレイ"></button>
     </div>
 
     <!-- サイトの注意メッセージ -->
@@ -116,15 +123,15 @@
         <div id="buttons">
             <!-- 終了ボタンを追加(完全リセット-プレイモード画面に戻る) -->
             <button id="reset-all-button" style="margin-bottom: 20px;"> <!-- 上下の間隔調整 -->
-                <img src="{{ url_for('static', filename='images/end_button.png') }}" alt="終了してリセット">
+                <img id="reset-image" src="{{ url_for('static', filename='images/end_button.png') }}" alt="終了してリセット">
                 <!-- 画像サイズは適宜調整 -->
             </button>
             <!-- ここまで -->
             <button id="hit-button">
-                <img src="{{ url_for('static', filename='images/hit_button.png') }}" alt="ヒット">
+                <img id="hit-image" src="{{ url_for('static', filename='images/hit_button.png') }}" alt="ヒット">
             </button>
             <button id="stand-button">
-                <img src="{{ url_for('static', filename='images/stand_button.png') }}" alt="スタンド">
+                <img id="stand-image" src="{{ url_for('static', filename='images/stand_button.png') }}" alt="スタンド">
             </button>
         </div>
 
@@ -134,7 +141,7 @@
         <div id="end-game" style="display: none;">
             <!-- 終了ではなくゲームを続ける -->
             <button id="next-game-button">
-                <img src="{{ url_for('static', filename='images/next_game_button.png') }}" alt="次のゲームへ">
+                <img id="next-game-image" src="{{ url_for('static', filename='images/next_game_button.png') }}" alt="次のゲームへ">
             </button>
             <!-- ここまで -->
         </div>
