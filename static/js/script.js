@@ -1,8 +1,8 @@
 // DOM要素の取得
-// ↓↓↓コメントアウト ↓↓↓
-// const modeSelectionDiv = document.getElementById("mode-selection");
-// const learnButton = document.getElementById("learn-button");
-// const learn2Button = document.getElementById("learn2-button");
+// ↓↓↓メンテナンス時以外はコメントアウトしておく ↓↓↓
+//const modeSelectionDiv = document.getElementById("mode-selection");
+//const learnButton = document.getElementById("learn-button");
+//const learn2Button = document.getElementById("learn2-button");
 const playButton = document.getElementById("play-button");
 const gameContainerDiv = document.getElementById("game-container");
 const playerHandDiv = document.getElementById("player-hand");
@@ -19,6 +19,8 @@ const declaredCardNameSpan = document.getElementById("declared-card-name");
 const aiSpCardListSpan = document.getElementById("ai-sp-card-list");
 const aiDeclaredCardNameSpan = document.getElementById("ai-declared-card-name");
 const resetAllButton = document.getElementById("reset-all-button");
+const declarableSpCardsDiv = document.getElementById("declarable-sp-cards");
+const instantSpCardsDiv = document.getElementById("instant-sp-cards");
 
 
 // メッセージログに新しいメッセージを追加する関数
@@ -103,66 +105,145 @@ function updatePointsDisplay(playerPoints, aiPoints) {
 /**
  * SPカードの表示を更新する関数
  * @param {Object} spCards - プレイヤーの所持SPカード情報
- * @param {string|null} declaredCardId - 現在宣言中のカードID (なければ null or undefined)
+ * @param {string|null} declaredCardId - 現在プレイヤーが宣言中のカードID (なければ null or undefined)
  */
-function updateSpCardsDisplay(spCards, declaredCardId) { // ★ 引数に declaredCardId を追加 ★
-    spCardListDiv.innerHTML = ''; // 表示クリア
+function updateSpCardsDisplay(spCards, declaredCardId) {
+    console.log("DEBUG: updateSpCardsDisplay called. spCards:", JSON.stringify(spCards), "declaredCardId:", declaredCardId); // ★デバッグ追加★
+    
+    // HTML要素の取得 (関数の冒頭にまとめる)
+    const declarableSpCardsDiv = document.getElementById("declarable-sp-cards");
+    const instantSpCardsDiv = document.getElementById("instant-sp-cards");
+    const declaredCardNameSpan = document.getElementById("declared-card-name");
+    const aiDeclaredCardNameSpan = document.getElementById("ai-declared-card-name"); // AIの宣言表示用
+    const hitButton = document.getElementById("hit-button"); // プレイヤーのターン判定用
 
-    // --- 宣言中カード表示の更新を追加 ---
-    if (declaredCardId && SP_CARDS_MASTER_JS && SP_CARDS_MASTER_JS[declaredCardId]) {
-        // ★ SP_CARDS_MASTER_JS が必要 (後述) ★
-        declaredCardNameSpan.textContent = SP_CARDS_MASTER_JS[declaredCardId].name || declaredCardId;
-    } else if (declaredCardId) {
-        declaredCardNameSpan.textContent = declaredCardId; // マスター情報なければID表示
-    }
-     else {
-        declaredCardNameSpan.textContent = 'なし';
-    }
-    // --- 宣言中カード表示の更新を追加 ---
+    if (!declarableSpCardsDiv) console.error("DEBUG: declarable-sp-cards div not found!");
+    if (!instantSpCardsDiv) console.error("DEBUG: instant-sp-cards div not found!");
+    if (!declaredCardNameSpan) console.error("DEBUG: declared-card-name span not found!");
+    if (!aiDeclaredCardNameSpan) console.warn("DEBUG: ai-declared-card-name span not found! AI declaration status may not work correctly."); // 警告に変更
+    if (!hitButton) console.error("DEBUG: hit-button not found! Player turn check may not work correctly.");
 
+    // 表示エリアをクリア
+    if (declarableSpCardsDiv) declarableSpCardsDiv.innerHTML = '';
+    if (instantSpCardsDiv) instantSpCardsDiv.innerHTML = '';
+
+    // プレイヤーの宣言中カード表示の更新
+    if (declaredCardNameSpan) { // 要素が存在する場合のみ処理
+        if (declaredCardId && SP_CARDS_MASTER_JS && SP_CARDS_MASTER_JS[declaredCardId]) {
+            declaredCardNameSpan.textContent = SP_CARDS_MASTER_JS[declaredCardId].name || declaredCardId;
+        } else if (declaredCardId) {
+            declaredCardNameSpan.textContent = declaredCardId;
+        } else {
+            declaredCardNameSpan.textContent = 'なし';
+        }
+    }
 
     if (!spCards || Object.keys(spCards).length === 0) {
-        spCardListDiv.innerHTML = '<p>なし</p>';
+        console.log("DEBUG: No SP cards data or empty spCards object."); // ★デバッグ追加★
+        if (declarableSpCardsDiv) declarableSpCardsDiv.innerHTML = '<p>なし</p>';
+        if (instantSpCardsDiv) instantSpCardsDiv.innerHTML = '<p>なし</p>';
         return;
     }
 
+    console.log("DEBUG: SP_CARDS_MASTER_JS:", JSON.stringify(SP_CARDS_MASTER_JS));
+    
+    let declarableCardsCount = 0;
+    let instantCardsCount = 0;
+
+    // --- AIが何か宣言系カードを宣言中かどうかの判定 (ループの前に一度だけ行う) ---
+    // aiDeclaredCardNameSpan が存在し、かつテキストが「なし」や空でない場合に true
+    const aiIsDeclaring = aiDeclaredCardNameSpan ? 
+                          (aiDeclaredCardNameSpan.textContent !== 'なし' && aiDeclaredCardNameSpan.textContent !== '') : 
+                          false;
+    console.log("DEBUG: Initial check - aiIsDeclaring:", aiIsDeclaring, "(Based on aiDeclaredCardNameSpan.textContent:", aiDeclaredCardNameSpan ? aiDeclaredCardNameSpan.textContent : "Element not found or null", ")");
+
+
     for (const cardId in spCards) {
+        console.log(`DEBUG: Processing cardId: ${cardId}, Count: ${spCards[cardId]}`);
         const count = spCards[cardId];
-        if (count > 0) {
+
+        if (count > 0) { // 所持数が1以上なら表示処理
+            const cardMasterInfo = SP_CARDS_MASTER_JS[cardId];
+
+            if (!cardMasterInfo) {
+                console.warn(`DEBUG: SP_CARDS_MASTER_JS missing info for: ${cardId}. This card will not be displayed.`);
+                continue; // マスター情報がなければこのカードは表示しない
+            }
+            console.log(`DEBUG: cardMasterInfo for ${cardId}: ${JSON.stringify(cardMasterInfo)}, Type: ${cardMasterInfo.type}`);
+
+            // カードアイテムのコンテナを作成
             const cardInfoDiv = document.createElement('div');
             cardInfoDiv.classList.add('sp-card-item');
 
-            // ★ カード名表示部分もマスター情報を使うようにする (後述) ★
-            const cardName = (SP_CARDS_MASTER_JS && SP_CARDS_MASTER_JS[cardId]) ? SP_CARDS_MASTER_JS[cardId].name : cardId;
+            // カード名と所持数の表示
+            const cardName = cardMasterInfo.name || cardId; // マスター名がなければID
             const cardCountText = ` x ${count}`;
-
             const cardTextSpan = document.createElement('span');
             cardTextSpan.textContent = `${cardName}${cardCountText} `;
             cardInfoDiv.appendChild(cardTextSpan);
 
+            // 「使用」ボタンの作成
             const useButton = document.createElement('button');
-            useButton.textContent = '使用宣言'; // ★ ボタンテキスト変更 ★
+            useButton.textContent = '使用';
             useButton.classList.add('use-sp-button');
             useButton.dataset.cardId = cardId;
 
-            // ★ ボタンの有効/無効状態を設定 (修正) ★
-            // 1. 既に何か宣言中(declaredCardIdが存在する)なら無効
-            // 2. 相手ターンなど操作不可状態(hitButtonが無効)なら無効
-            // 3. このカードの枚数が0以下なら無効 (これはループ条件でカバーされているが一応)
-            const isAlreadyDeclared = !!declaredCardId;
-            const isNotPlayerTurn = hitButton.disabled; // ヒットボタンが無効ならプレイヤーのターンではない
+            // ボタンの有効/無効化ロジック
+            let buttonDisabled = false;
+            // hitButton が存在し、かつ disabled であればプレイヤーのターンではない
+            const isNotPlayerTurn = hitButton ? hitButton.disabled : true; 
+            // declaredCardId はプレイヤーが宣言中のカードID (関数の引数)
 
-            useButton.disabled = isAlreadyDeclared || isNotPlayerTurn;
+            if (cardMasterInfo.type === "instant") {
+                // 即時発動系カード (例: 手札戻し)
+                // 条件: プレイヤーのターンであること
+                buttonDisabled = isNotPlayerTurn;
+            } else if (cardMasterInfo.type === "declare") {
+                // 宣言系カード (例: ポイント-3)
+                // 条件: プレイヤーのターンであること
+                //       かつ、プレイヤー自身が何も宣言していないこと (declaredCardId が null または空)
+                //       かつ、AIも何も宣言系カードを宣言していないこと (aiIsDeclaring が false)
+                buttonDisabled = isNotPlayerTurn || !!declaredCardId || aiIsDeclaring;
+            } else {
+                console.warn(`未定義または不明なSPカードタイプ: ${cardId}, Type: ${cardMasterInfo.type}. Button will be disabled.`);
+                buttonDisabled = true; // 不明なタイプは安全のために無効化
+            }
+            useButton.disabled = buttonDisabled;
+
+            // ボタン状態のデバッグログ (ループ内、各ボタンごとに出力)
+            console.log(`DEBUG: Button for ${cardId} - Type: ${cardMasterInfo.type}, isNotPlayerTurn: ${isNotPlayerTurn}, playerDeclaredId: ${declaredCardId}, aiIsDeclaring: ${aiIsDeclaring}, Resulting buttonDisabled: ${buttonDisabled}`);
 
             useButton.addEventListener('click', handleUseSpCard);
             cardInfoDiv.appendChild(useButton);
 
-            spCardListDiv.appendChild(cardInfoDiv);
+            // カードの種類に応じて適切な表示コンテナに追加
+            if (cardMasterInfo.type === "instant") {
+                if (instantSpCardsDiv) {
+                    instantSpCardsDiv.appendChild(cardInfoDiv);
+                    instantCardsCount++; // 表示したカードの数をカウント
+                } else {
+                    console.warn("instant-sp-cards の表示エリアが見つかりません。");
+                }
+            } else if (cardMasterInfo.type === "declare") {
+                if (declarableSpCardsDiv) {
+                    declarableSpCardsDiv.appendChild(cardInfoDiv);
+                    declarableCardsCount++; // 表示したカードの数をカウント
+                } else {
+                    console.warn("declarable-sp-cards の表示エリアが見つかりません。");
+                }
+            } else {
+                // typeが未定義または不明なカードはここでは表示しない
+                console.log(`Card ${cardId} with unknown type '${cardMasterInfo.type}' was not added to any display list.`);
+            }
         }
     }
 
-    if (spCardListDiv.innerHTML === '') {
-         spCardListDiv.innerHTML = '<p>なし</p>';
+    // 各コンテナにカードが一つも表示されなかった場合に「なし」と表示
+    if (declarableSpCardsDiv && declarableCardsCount === 0) {
+        declarableSpCardsDiv.innerHTML = '<p>なし</p>';
+    }
+    if (instantSpCardsDiv && instantCardsCount === 0) {
+        instantSpCardsDiv.innerHTML = '<p>なし</p>';
     }
 }
 
@@ -202,11 +283,19 @@ function updateAIDeclaredCardDisplay(declaredCardId) {
     }
 }
 
-// --- ★ SPカードのマスター情報をJSでも保持する ★ ---
+// --- SPカードのマスター情報をJSでも保持 ---
 // 本来はサーバーから取得するのが望ましいが、一旦ここで定義
 const SP_CARDS_MASTER_JS = {
-    "sp_minus_3": { "name": "ポイント-3", "description": "相手のポイントを3減らす" }
-    // Python側の SP_CARDS_MASTER と内容を合わせておく
+    "sp_minus_3": { 
+        "name": "ポイント-3", 
+        "description": "相手のポイントを3減らす",
+        "type": "declare" // "declare" を追加
+    },
+    "sp_return_last_card": {
+        "name": "手札戻し",
+        "description": "最後に引いたカード1枚を山札に戻す。",
+        "type": "instant" //"instant" を追加
+    }
 };
 // -------------------------------------------------
 
@@ -227,7 +316,7 @@ async function handleUseSpCard(event) {
     document.querySelectorAll('.use-sp-button').forEach(btn => btn.disabled = true);
 
     const cardName = (SP_CARDS_MASTER_JS && SP_CARDS_MASTER_JS[cardId]) ? SP_CARDS_MASTER_JS[cardId].name : cardId;
-    appendMessage(`'${cardName}' の使用を宣言します...`);
+    appendMessage(`'${cardName}' の使用を使用します...`);　// 「宣言」から「使用」に変更
 
     try {
         const response = await fetch('/use_sp_card', {
@@ -242,40 +331,55 @@ async function handleUseSpCard(event) {
             throw new Error(data.error || `サーバーエラー: ${response.status}`);
         }
 
-        // --- ↓↓↓ 修正箇所: ボタン状態の更新を先に行う ↓↓↓ ---
-        // SPカード宣言後はプレイヤーのターンが続くのでヒット/スタンドを有効化
-        hitButton.disabled = false;
-        standButton.disabled = false;
-        // SPカードボタンの状態は、この後呼び出す updateSpCardsDisplay で
-        // data.declared_sp_card を見て適切に設定される
-        // (宣言されたので、全てのSPカードボタンは disabled = true になるはず)
-        // --- ↑↑↑ 修正箇所: ボタン状態の更新を先に行う ↑↑↑ ---
+        // --- ボタン状態の更新 (API応答後) ---
+        // 即時発動系カードの場合、プレイヤーのターンが続くことが多い
+        // 宣言系カードの場合も、宣言後にプレイヤーが続けて行動できる
+        if (!data.game_over) { // ゲームが続いていれば
+             hitButton.disabled = false;
+             standButton.disabled = false;
+        } else { // (ほぼありえないが) SPカード使用でゲームオーバーになった場合
+             hitButton.disabled = true;
+             standButton.disabled = true;
+             if (typeof endGameDiv !== 'undefined') endGameDiv.style.display = "block";
+        }
 
         // --- 表示更新 (ボタン状態が確定した後) ---
         updatePointsDisplay(data.player_points, data.ai_points);
-        // プレイヤーのSPカード表示更新 (宣言中カードIDも渡す)
-        updateSpCardsDisplay(data.player_sp_cards, data.declared_sp_card || null); // || null を追加
-        // AIのSPカード表示更新
-        updateAISpCardsDisplay(data.ai_sp_cards);
-        // AIの宣言中カード表示更新
-        updateAIDeclaredCardDisplay(data.ai_declared_sp_card || null);
         // 手札表示は宣言では変わらないので不要
         // updateCards(data.player_hand, data.ai_hand);
         appendMessage(data.message); // サーバーからのメッセージを表示
 
-    } catch (error) {
-        console.error("Error declaring SP card:", error);
-        appendMessage(`SPカード宣言エラー: ${error.message}`);
-        // エラー時は操作可能に戻す
-        hitButton.disabled = false;
-        standButton.disabled = false;
-        // エラーが発生した場合、SPカードボタンの状態をどうするか？
-        // → 宣言前の状態に戻すのが自然か。サーバーから最新情報を再取得して
-        //   updateSpCardsDisplay を呼び出すのが理想だが、暫定的に
-        //   エラー発生前のSPカード情報で再度 updateSpCardsDisplay を呼ぶなど。
-        //   あるいは、単純に全てのSPボタンを有効に戻す（枚数表示と矛盾する可能性あり）
-         document.querySelectorAll('.use-sp-button').forEach(btn => btn.disabled = false); // 一旦有効に戻す
+        // 「手札戻し」カード使用による手札更新
+        if (data.player_hand_updated && data.player_hand) {
+            // data.player_hand には更新されたプレイヤーの手札が、
+            // data.ai_hand には (変更ないはずだが念のため) AIの手札表示用データが入っている想定
+            updateCards(data.player_hand, data.ai_hand); 
+            appendMessage("あなたの手札が更新されました。");
+        }
+        
+        // SPカードリストと宣言状態の表示更新
+        // data.declared_sp_card は宣言系カードの場合にセットされる
+        updateSpCardsDisplay(data.player_sp_cards, data.declared_sp_card || null);
+        updateAISpCardsDisplay(data.ai_sp_cards);
+        updateAIDeclaredCardDisplay(data.ai_declared_sp_card || null);        
 
+    } catch (error) {
+        console.error("Error using SP card:", error);
+        appendMessage(`SPカード使用エラー: ${error.message}`);
+        // エラー時は操作可能に戻す (状況に応じてより丁寧な復帰処理も検討)
+        if (!document.getElementById("end-game") || document.getElementById("end-game").style.display === "none"){
+            hitButton.disabled = false;
+            standButton.disabled = false;
+        }
+        // SPカードボタンの状態も元に戻すか、再取得して更新するのが望ましい
+        // ここでは一旦、全てのSPカードボタンを有効に戻す（枚数が0のものはupdateSpCardsDisplayで再度無効化される）
+        updateSpCardsDisplay(
+            JSON.parse(sessionStorage.getItem('last_player_sp_cards') || '{}'), // sessionStorage等で直前の状態を保持していれば
+            sessionStorage.getItem('last_declared_sp_card') || null
+        ); 
+        // もし直前の状態を保持していない場合は、単純に全ボタンを有効化するしかない
+        // document.querySelectorAll('.use-sp-button').forEach(btn => btn.disabled = false); 
+        // または、サーバーから最新のSPカード情報を取得して表示を更新する関数を呼ぶ
     }
 }
 
@@ -525,7 +629,7 @@ standButton.addEventListener("click", async () => {
 //        }
 //    });
 //} else {
-    console.warn("learn-button がHTML内に見つかりません。");
+//    console.warn("learn-button がHTML内に見つかりません。");
 //}
 //
 // Phase2 学習ボタン
