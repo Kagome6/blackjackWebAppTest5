@@ -9,29 +9,28 @@
     background-position: center;
 }
 
-/* プレイヤーの手札 */
+/* ======================================== */
+/*  レイアウトに関する重要な設定           */
+/* ======================================== */
+
+/* AIの手札エリア */
+#ai-area {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    width: 80%;
+    margin-top: 130px; /* 位置を少し調整 */
+    font-size: 1.5rem;
+}
+
+/* プレイヤーの手札エリア */
 #player-area {
     position: fixed;
     bottom: 20px;
     left: 20px;
-    width: 80%;
-}
-
-#player-hand .card {
-    background-color: #f0fff0;
-}
-
-/* AIの手札 */
-#ai-area {
-    position: fixed;
-    top: 20px; /* 既存の top の値はそのままでもよい場合 */
-    left: 20px;
-    width: 80%;
-    margin-top: 200px;  /* 60px 分下げる */
-}
-
-#ai-hand .card {
-    background-color: #f0f8ff;
+    width: calc(100% - 40px - 450px - 40px); /* 画面幅 - 左右余白 - ボタンエリア幅 - ボタンとの隙間 */
+    max-width: 1200px; /* 最大幅を設定して広がりすぎを防ぐ */
+    font-size: 1.5rem;
 }
 
 /* ゲーム中の操作ボタン */
@@ -44,6 +43,165 @@
     flex-direction: column;
 }
 
+/* メッセージログエリア */
+#message-log {
+    position: fixed;
+    top: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+    max-height: 80px;
+    overflow-y: auto;
+    font-size: 20px;
+    background: rgba(255,255,255,0.8);
+    padding: 10px;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+}
+
+/*「次のゲームへ」ボタンのエリア */
+#end-game {
+    position: fixed;
+    bottom: 240px;
+    right: 20px;
+}
+
+/* SPカードボックス内の文字サイズを基準(1rem)に戻す場合 */
+.sp-cards-container {
+    font-size: 1.2rem;
+}
+
+
+/* ======================================== */
+/*  SPカードレイアウト表示ボックス            */
+/* ======================================== */
+
+/* プレイヤーエリア全体は縦に要素を並べる */
+#player-area {
+    /* position: fixed; などはそのまま */
+    display: flex;
+    flex-direction: column; /* ★縦並びに変更 */
+    gap: 10px; /* 上段と下段(手札)の間の隙間 */
+}
+
+/* 上段：タイトルとSPカードを横に並べるためのラッパー */
+.player-top-row {
+    display: flex; /* ★子要素(タイトルとSPカード)を横に並べる */
+    justify-content: flex-start; /* 左寄り */
+    align-items: flex-end; /* 下端を揃える */
+    gap: 20px;
+}
+
+/* タイトルとポイント */
+.player-title-area {
+    flex-shrink: 0; /* タイトル部分が縮まないように */
+}
+
+/* SPカードボックスのラッパー */
+.sp-cards-container-wrapper {
+    min-width: 450px;
+    max-width: 600px;
+}
+
+/* 手札エリア */
+#player-hand {
+    /* 手札カードが増えたときに左から右に並ぶように */
+    display: flex;
+    flex-wrap: wrap; /* カードが多すぎたら折り返す */
+}
+
+
+/* --- SPカードボックス関連のスタイルは前回とほぼ同じ --- */
+/* (セレクタの親子関係が変わっただけなので、スタイル定義は流用可能) */
+
+.sp-cards-container {
+    padding: 15px;
+    border: 1px dashed #ccc;
+    background-color: #f8f8f8;
+    border-radius: 8px;
+}
+
+.sp-cards-container h3,
+.sp-cards-container h4 {
+    margin: 0 0 10px 0;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+.sp-card-types-wrapper {
+    display: flex;
+    gap: 15px;
+}
+
+.sp-card-category {
+    flex: 1;
+}
+
+.sp-card-category h4 {
+    font-size: 0.9em;
+}
+
+.sp-card-category p { 
+    color: #888;
+    margin: 0;
+    font-style: italic;
+}
+
+.sp-card-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+    padding: 8px;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.sp-card-item button.use-sp-button {
+    margin-left: 10px;
+    padding: 6px 12px;
+    font-size: 1em;
+    cursor: pointer;
+    background-color: #c0e98b;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    white-space: nowrap;
+}
+
+.sp-card-item button.use-sp-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+
+
+/* ======================================== */
+/*  レスポンシブ対応 (現在は保留)             */
+/* ======================================== */
+/*@media (max-width: 1024px) {
+/*    .player-top-row {
+/*        flex-direction: column; /* 横並びを縦並びに変更 */
+/*        align-items: flex-start; /* 左揃えに */
+/*    }
+/*    
+/*    /* 他のレスポンシブスタイルは前回のを維持 */
+/*}
+
+
+/* ======================================== */
+/*  以下は既存のスタイルを維持            */
+/* ======================================== */
+
+#player-hand .card {
+    background-color: #f0fff0;
+}
+
+#ai-hand .card {
+    background-color: #f0f8ff;
+}
+
 #buttons button {
     margin-bottom: 20px;
     background-color: #f0f0f0; 
@@ -51,51 +209,39 @@
     border-radius: 12px;      
     padding: 10px;            
     line-height: 0;           
-    cursor: pointer; /* マウスカーソルを指マークにする */
-
-    /* ▼ 以下の2行を追加 ▼ */
-    box-shadow: 3px 3px 5px rgba(0, 0, 0, 0.15); /* ボタンに少し影を付けて立体感を出す */
-    transition: all 0.08s ease-out; /* 全ての変更を0.08秒かけて滑らかに行う */
+    cursor: pointer;
+    box-shadow: 3px 3px 5px rgba(0, 0, 0, 0.15);
+    transition: all 0.08s ease-out;
 }
 
 #buttons button:active {
-    /* クリックされたら、影を消す */
     box-shadow: none;
-
-    /* 少し右下に動かして「押し込まれた感」を出す */
     transform: translate(3px, 3px);
 }
 
-
-/* 画像サイズ設定 */
-/* 既存のルールから #buttons img を分離する */
 #mode-selection img, #end-game img, #play-selection img {
-    width: 390px; /* 他のエリアの画像サイズ */
+    width: 390px;
 }
 
-/* ヒット/スタンドボタンの画像サイズ */
 #buttons #hit-button img,
 #buttons #stand-button img {
     width: 390px;
 }
 
-/* 終了ボタンの画像サイズを個別指定 */
 #buttons #reset-all-button img {
-    width: 450px; /* または希望の小さいサイズ */
-    height: auto; /* 縦横比を維持 */
+    width: 450px;
+    height: auto;
 }
 
-/* 学習モード選択ボタン群 */
 #mode-selection {
     text-align: center;
     margin-top: 50px;
 }
 
-/* プレイモード選択ボタン */
 #play-selection {
     position: fixed;
-    bottom: 20px;      /* 画面下から20px上 */
-    left: 50%;         /* 横方向は中央 */
+    bottom: 20px;
+    left: 50%;
     transform: translateX(-50%);
     text-align: center;
 }
@@ -108,7 +254,6 @@
     cursor: pointer;
 }
 
-/* 注意メッセージ（赤文字） */
 .warning {
     color: red;
     font-weight: bold;
@@ -116,7 +261,6 @@
     margin-top: 20px;
 }
 
-/* 注意メッセージ（青文字） */
 .warningtwo {
     color: rgb(64, 123, 233);
     font-weight: bold;
@@ -124,8 +268,7 @@
     margin-top: 20px;
 }
 
-/* ルール説明用 */
-#rules-section {
+#rules-section, #ruletwo-section {
     width: 80%;
     margin: 20px auto;
     background: #fafafa;
@@ -133,176 +276,58 @@
     padding: 15px;
     font-size: 16px;
 }
-#rules-section h2 {
+#rules-section h2, #ruletwo-section h2 {
     margin-top: 0;
 }
 
-/* その他説明用 */
-#ruletwo-section {
-    width: 80%;
-    margin: 20px auto;
-    background: #fafafa;
-    border: 1px solid #ccc;
-    padding: 15px;
-    font-size: 16px;
-}
-#ruletwo-section h2 {
-    margin-top: 0;
-}
-
-/* PLAYボタンの基本スタイル */
 #play-button {
-    /* 1. ボタン自体の背景と枠線を消して、画像を「素」の状態で見せる */
     background: transparent;
     border: none;
-    padding: 0; /* 余白もリセット */
-    
-    /* 2. 押した時のアニメーションを滑らかにするための準備 */
+    padding: 0;
     transition: transform 0.1s ease-out;
-    cursor: pointer; /* マウスカーソルを指マークに */
+    cursor: pointer;
 }
 
-/* PLAYボタンがクリックされている瞬間のスタイル */
 #play-button:active {
-    /* 2. 画像を95%に少し縮小して「押した感」を出す */
     transform: scale(0.95);
 }
 
 .update-highlight {
-    font-weight: bold; /* 太字 */
-    color: blue;       /* 
-    /* 他にも必要であればスタイルを追加できます */
-    /* 例: 少し目立たせるために背景色を薄くつけるなど */
-    /* background-color: #e6f7ff; */
-    /* padding: 2px 4px; */
-    /* border-radius: 3px; */
+    font-weight: bold;
+    color: blue;
 }
 
 .text-attention-red {
+    font-weight: bold;
+    color: red;
+}
+
+.text-attention-yellow {
     font-weight: bold; /* 文字を太字にする */
-    color: red;       /
-    /* background-color: #e6f7ff; */
-    /* padding: 2px 4px; */
-    /* border-radius: 3px; */
+    color: #b8860b;    /* 暗めの黄色のカラーコード (ダークゴールデンロッド) */
 }
 
-/* メッセージログエリア */
-#message-log {
-    position: fixed;
-    top: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 80%;
-    /* ↓↓↓ 高さを調整 (例: 70px) ↓↓↓ */
-    max-height: 80px; /* 2行分程度の高さに調整 */
-    /* ↑↑↑ 高さを調整 ↑↑↑ */
-    overflow-y: auto;
-    font-size: 20px;
-    background: rgba(255,255,255,0.8);
-    padding: 10px;
-    border: 1px solid #ccc;
-    box-sizing: border-box; /* paddingとborderを含めて高さを計算 */
-}
-
-/*「次のゲームへ」ボタンのエリアのスタイルを復活 */
-#end-game {
-    position: fixed;     /* 位置を固定 */
-    bottom: 240px;       /* 下からの位置 (お好みで) */
-    right: 20px;         /* 右からの位置 (元のまま) */
-    /* display: none; は JS側で制御するのでCSSでは不要 */
-}
-
-#end-game button { /* ボタン自体のスタイル (元のままで良ければ不要) */
-    margin: 0; /* 必要に応じて調整 */
+#end-game button {
+    margin: 0;
     padding: 5px;
     border: none;
     background-color: transparent;
     cursor: pointer;
 }
 
-#end-game img { /* 画像サイズ (元の指定を流用) */
+#end-game img {
     width: 390px;
 }
 
-      
-/* --- SPカード表示エリア全体のスタイル --- */
-#player-sp-cards-area {
-    margin-top: 15px;
-    margin-bottom: 10px;
-    padding: 10px;
-    border: 1px dashed #ccc;
-    background-color: #f8f8f8;
-    max-width: 300px; /* 任意 */
-}
-
-/* --- SPカードセクション内の見出しスタイル --- */
-#player-sp-cards-area h3 { /* 「SPカード:」という大見出し */
-    margin-top: 0;
-    margin-bottom: 10px; /* h4との間隔を少し取る */
-    font-size: 1em;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 3px;
-}
-
-/* 新しいh4 (「即時発動SPカード:」「宣言型SPカード:」) のスタイル */
-#player-sp-cards-area h4 {
-    margin-top: 10px; /* 前の要素との間隔 */
-    margin-bottom: 5px;
-    font-size: 0.9em; /* h3より少し小さく */
-    color: #333; /* 文字色など */
-}
-
-/* 新しいSPカードカテゴリごとのコンテナのスタイル*/
-.sp-card-category {
-    /* ここに以前 #sp-card-list にあったようなスタイルを適用可能 */
-    /* 例えば、カテゴリごとに枠線や背景を変えたい場合など */
-    /* 今回は特に指定せず、中の .sp-card-item に依存させる */
-    margin-bottom: 10px; /* カテゴリ間の余白 */
-}
-
-/* 「なし」の場合のスタイル (各カテゴリコンテナ内の p タグに適用) */
-.sp-card-category p { 
-    color: #888;
-    margin: 0;
-    font-style: italic; /* 少し斜体にするなど */
-}
-
-/* 個々のSPカード表示スタイル (変更なし、ただし適用範囲が新しいコンテナ内に)  */
-.sp-card-item {
-    margin-bottom: 5px;
-    padding: 5px;
-    background-color: #fff;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 0.9em;
-}
-
-/* SPカード使用ボタンのスタイル */
-.sp-card-item button.use-sp-button {
-    margin-left: 10px;
-    padding: 2px 8px;
-    font-size: 0.8em;
-    cursor: pointer;
-    background-color: #c0e98b;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-}
-
-.sp-card-item button.use-sp-button:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-}
 
 /* --- テーマ切り替えトグルスイッチのスタイル --- */
 .theme-switch-wrapper {
-    /* スイッチの位置を調整（好きな位置に固定できます） */
     position: fixed;
     top: 20px;
-    left: 20px; /* 右上に配置する例 */
-    z-index: 100; /* 他の要素より手前に表示 */
+    left: 20px;
+    z-index: 100;
 }
 
-/* スイッチ全体のコンテナ */
 .theme-switch {
     position: relative;
     display: inline-block;
@@ -310,14 +335,12 @@
     height: 34px;
 }
 
-/* HTMLのチェックボックス本体は隠す */
 .theme-switch input {
     opacity: 0;
     width: 0;
     height: 0;
 }
 
-/* スイッチの背景（トラック）部分 */
 .slider {
     position: absolute;
     cursor: pointer;
@@ -325,11 +348,10 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: #ccc; /* オフ（ライトモード）の色 */
-    transition: .4s; /* アニメーションの時間 */
+    background-color: #ccc;
+    transition: .4s;
 }
 
-/* スイッチの円（ツマミ）部分 */
 .slider:before {
     position: absolute;
     content: "";
@@ -338,22 +360,17 @@
     left: 4px;
     bottom: 4px;
     background-color: white;
-    transition: .4s; /* アニメーションの時間 */
+    transition: .4s;
 }
 
-/* テーマ切り替えスイッチ用アニメーションの心臓部 */
-
-/* チェックされた時（オン）のトラックの色 */
 input:checked + .slider {
-    background-color: #2d200c; /* オン（ダークモード）の色 */
+    background-color: #2d200c;
 }
 
-/* チェックされた時（オン）のツマミの位置 */
 input:checked + .slider:before {
-    transform: translateX(26px); /* 右に26pxスライドさせる */
+    transform: translateX(26px);
 }
 
-/* 角を丸くしてスイッチらしい見た目にする */
 .slider.round {
     border-radius: 34px;
 }
@@ -362,14 +379,12 @@ input:checked + .slider:before {
 }
 
 
+
 /* --- ここからダークモード用スタイル --- */
-
 body.dark-mode {
-    background-color: #AFA195; /* 全体の背景色 */
-    color: black;              /* ゲーム画面の基本文字色 */
+    background-color: #AFA195;
+    color: black;
 }
-
-/* --- ゲーム画面のスタイル --- */
 
 body.dark-mode #message-log {
     background-color: #3d2f24;
@@ -383,34 +398,29 @@ body.dark-mode .card {
     border-color: #5e524b;
 }
 
-body.dark-mode .card.hidden-card {
-    background-color: #d3d3d3;
-    color: black;
-    border-color: #aaa;
-}
 
-body.dark-mode #player-sp-cards-area {
+/* ダークモード対応SPカード表示ボックス */
+body.dark-mode .sp-cards-container {
     background-color: #261909;
     color: #f0f0f0;
     border-color: #444;
 }
-
-body.dark-mode #player-sp-cards-area h3,
-body.dark-mode #player-sp-cards-area h4 {
+body.dark-mode .sp-cards-container h3,
+body.dark-mode .sp-cards-container h4 {
     color: #f0f0f0;
     border-bottom-color: #444;
 }
-
 body.dark-mode .sp-card-item {
     background-color: #3a3a3a;
     border-color: #666;
 }
-
 body.dark-mode .sp-card-item button.use-sp-button {
     background-color: #c0da9e;
     color: #0a0a0a;
     border-color: #777;
 }
+
+
 
 body.dark-mode #buttons {
     background-color: #2d200c;
@@ -418,42 +428,44 @@ body.dark-mode #buttons {
     border-radius: 10px;
 }
 
-
-/* --- ここから最初の画面のダークモード用スタイル --- */
-
-/* ルール説明エリア */
+/* --- 最初の画面のダークモード用スタイル --- */
 body.dark-mode #rules-section,
 body.dark-mode #ruletwo-section {
-    background-color: #221C1A; /* 画像から取得した、より暗い背景色 */
-    color: white;              /* 指示通り、文字は白に */
+    background-color: #221C1A;
+    color: white;
     border-color: #555;
 }
 
-/* ルール説明内の強調文字 (指定された色に) */
 body.dark-mode .update-highlight {
-    color: #b8b6d5;
+    color: #ccc9ff;
 }
 body.dark-mode .text-attention-red {
     color: #c98a8a;
 }
 
-/* サイト上部の注意メッセージ */
-body.dark-mode .warning { /* 元々赤文字だった方 */
-    color: #c0da9e; /* 淡い緑系統の色 */
+body.dark-mode .text-attention-yellow {
+    color: #f9eec2;    /* ダークモードでは少し明るい黄色の方が見やすい*/
 }
-body.dark-mode .warningtwo { /* 元々青文字だった方 */
-    color: #a7819a; /* 指定されたカラーコード */
+
+body.dark-mode .warning {
+    color: #c0da9e;
+}
+body.dark-mode .warningtwo {
+    color: #a7819a;
 }
 
 body.dark-mode #buttons button {
-    background-color: transparent; /* 背景を透明に戻す */
-    border: none;                  /* 枠線も消す */
-    padding: 0;                    /* 余白もリセット */
+    background-color: transparent;
+    border: none;
+    padding: 0;
 }
 
-/* ダークモードの時だけ、「引く」「引かない」ボタンの画像を少し拡大する */
 body.dark-mode #hit-button img,
 body.dark-mode #stand-button img {
-    transform: scale(1.1); /* 1.1倍（110%）に拡大 */
-    transition: transform 0.2s ease-out; /* テーマ切替時に滑らかに拡大/縮小させる */
+    transform: scale(1.1);
+    transition: transform 0.2s ease-out;
+}
+
+body.dark-mode #play-button img {
+    transform: scale(1.4); /* 拡大率140% */
 }
