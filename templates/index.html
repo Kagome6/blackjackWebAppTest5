@@ -20,13 +20,12 @@
     </div>
 
     <div id="play-selection">
-        
         <button id="play-button"><img id="play-image" src="{{ url_for('static', filename='images/play_button.png') }}" alt="プレイ"></button>
     </div>
 
     <!-- サイトの注意メッセージ -->
     <div id="warning-message" class="warning">
-        これは実験用です。AIのターンで2連続引いてしまうなど、正常な挙動をしないことが確認できています
+        これは実験用です。複数アクセス時やターン時の状態管理など稀に正常な挙動をしないことが確認できています
     </div>
 
     <!-- 注意メッセージ2 -->
@@ -49,13 +48,14 @@
             ・AIはQテーブル方式です。事前学習された確率に基づき場の状況を見ながら引くか引かないかを決めます。<br>
 
             <strong>──2025-03-26以降の更新──</strong><br>
-            試合中にポイントを賭けるシステムを追加しました。勝てそうなら「宣言型SPカード」を使用し、相手の命を減らすことができます<br>
+            試合中にポイントを賭けるシステムを追加しました。<span class="text-attention-yellow">勝てそうなら「宣言型SPカード」を使用し、相手の命を減らすことができます</span><br>
             また試合中AI側の手札表示で”初期カードだけを試合終了まで隠す”ように変更しました<br>
             <strong>──2025-06-26以降の更新──</strong><br>
             どちらかがバーストした瞬間に、強制的に勝敗判定が行われてしまう仕様を変更し、試合を継続するように<br>
             メッセージボックスにおけるAI側の合計表示を試合終了まで削除<br>
             そのほかAI側にハードコード型の思考判断改良を実施<br>
             SPカードの種類を拡充(最後に引いた手札カードを山札に戻せる即時発動SPカードを追加しました)<br>
+            ダークモードを追加し、そのほか大量のバグ修正とパフォーマンス改善を実施<br>
             <strong>──今後の改良案──</strong><br>
             Q学習エンジンの報酬改善や重み変更、AI側がSPカードを発動するときの条件を強化等<br>
         </p>
@@ -89,36 +89,50 @@
             </div>
             <!-- ここまで -->
             
-            <div id="ai-hand"></div>
+            <div id="ai-hand" class="hand"></div>
         </div>
+
 
         <div id="player-area">
-            <h2>あなたの手札:</h2>
-            <div>あなたのポイント: <span id="player-points">--</span></div>
-            <div id="player-sp-cards-area">
-                <h3>SPカード:</h3>
-                <!-- プレイヤーの宣言中カード表示 (これはこのままでOK) -->
-                <div id="declared-sp-card-display" style="margin-bottom: 5px; font-weight: bold;">
-                    宣言中: <span id="declared-card-name">なし</span>
-                </div>
-                
-                <!-- 2025-0626以降の変更点 -->
-                <h4>即時発動SPカード:</h4>
-                <div id="instant-sp-cards" class="sp-card-category">
-                    <!-- ここに即時発動系SPカードがリスト表示されます -->
-                    <p>なし</p> 
+            <!-- 上段：タイトルとSPカードボックスを横に並べるためのラッパー -->
+            <div class="player-top-row">
+        
+                <!-- 左側：タイトルとポイント -->
+                <div class="player-title-area">
+                    <h2>あなたの手札:</h2>
+                    <div>あなたのポイント: <span id="player-points">--</span></div>
                 </div>
 
-                <h4>宣言型SPカード:</h4>
-                <div id="declarable-sp-cards" class="sp-card-category">
-                    <!-- ここに宣言系SPカードがリスト表示されます -->
-                    <p>なし</p>
-                </div>
-                <!--ここまで-->
+                <!-- 右側：SPカードボックス -->
+                <div class="sp-cards-container-wrapper">
+                    <div class="sp-cards-container">
+                        <h3>SPカード</h3>
+                        <div id="declared-sp-card-display" style="font-weight: bold;">
+                            宣言中: <span id="declared-card-name">なし</span>
+                        </div>
+                        
+                        <div class="sp-card-types-wrapper">
+                            <div class="sp-card-category">
+                                <h4>即時発動SPカード:</h4>
+                                <div id="instant-sp-cards"><p>なし</p></div>
+                            </div>
+                            <div class="sp-card-category">
+                                <h4>宣言型SPカード:</h4>
+                                <div id="declarable-sp-cards"><p>なし</p></div>
+                            </div>
+                        </div>
+                    </div>
+                </div> <!-- sp-cards-container-wrapper 閉じタグ -->
 
+            </div> <!-- player-top-row 閉じタグ -->
+
+            <!-- 下段：手札カードの表示エリア -->
+            <div id="player-hand" class="hand">
+                <!-- JSによってここにカードが動的に挿入されます -->
             </div>
-            <div id="player-hand"></div>
+
         </div>
+
 
         <div id="buttons">
             <!-- 終了ボタンを追加(完全リセット-プレイモード画面に戻る) -->
