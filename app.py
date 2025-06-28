@@ -5,7 +5,7 @@ import sys
 
 # --- Flask アプリケーションのインスタンス作成 ---
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'  # セッション用の秘密鍵
+app.secret_key = 'your_super_secret_and_random_string_here'  # セッション用の秘密鍵
 
 # --- ゲーム設定 ---
 DECK = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]  # 1～11のカードが1枚ずつ
@@ -110,6 +110,85 @@ def judge(player_total, ai_total):
         return -1 # AI勝利
     else:
         return 0  # 引き分け
+    
+
+# --- 新しい決着処理関数 ---
+def _finalize_round():
+    """
+    ラウンドの決着処理を専門に行う関数。
+    勝敗判定、ポイント増減、宣言済みSPカードの効果適用を全て担当する。
+    """
+    player_hand = session.get("player_hand", [])
+    ai_hand = session.get("ai_hand", [])
+    player_total = calculate_total(player_hand)
+    ai_total = calculate_total(ai_hand)
+
+    # 1. 勝敗判定
+    result = judge(player_total, ai_total) # 1: Player win, -1: AI win, 0: Draw
+
+    # 2. 基本的なポイント増減
+    player_points = session.get('player_points', INITIAL_POINTS)
+    ai_points = session.get('ai_points', INITIAL_POINTS)
+    
+    game_result_message = ""
+    final_points_change_message = ""
+
+    if result == 1: # プレイヤーの勝ち
+        player_points += POINT_CHANGE_ON_WIN
+        ai_points += POINT_CHANGE_ON_LOSE
+        game_result_message = "あなたの勝ち！"
+        final_points_change_message = f" ({POINT_CHANGE_ON_WIN:+d}ポイント)"
+    elif result == -1: # AIの勝ち
+        player_points += POINT_CHANGE_ON_LOSE
+        ai_points += POINT_CHANGE_ON_WIN
+        game_result_message = "AIの勝ち！"
+        final_points_change_message = f" ({POINT_CHANGE_ON_LOSE:+d}ポイント)"
+    else: # 引き分け
+        game_result_message = "引き分け！ (ポイント変動なし)"
+
+    # 3. SPカード効果の適用
+    sp_effect_message = ""
+    
+    # プレイヤー勝利時に、プレイヤーが宣言していたカードの効果を適用
+    declared_card_player = session.pop('declared_sp_card', None)
+    if result == 1 and declared_card_player and declared_card_player in SP_CARDS_MASTER:
+        card_info = SP_CARDS_MASTER[declared_card_player]
+        effect_value = card_info.get("effect_value", 0)
+        target = card_info.get("target", "opponent")
+        if target == "opponent": # 対象はAI
+            original_ai_points = ai_points
+            ai_points += effect_value # ★AIのポイントを実際に変更★
+            sp_effect_message += f"\nあなたが宣言した'{card_info.get('name')}'の効果発動！ AIのポイントが {original_ai_points} → {ai_points} に！"
+
+    # AI勝利時に、AIが宣言していたカードの効果を適用
+    declared_card_ai = session.pop('ai_declared_sp_card', None)
+    if result == -1 and declared_card_ai and declared_card_ai in SP_CARDS_MASTER:
+        card_info = SP_CARDS_MASTER[declared_card_ai]
+        effect_value = card_info.get("effect_value", 0)
+        target = card_info.get("target", "opponent")
+        if target == "opponent": # 対象はプレイヤー
+            original_player_points = player_points
+            player_points += effect_value # ★プレイヤーのポイントを実際に変更★
+            sp_effect_message += f"\nAIが宣言した'{card_info.get('name')}'の効果発動！ あなたのポイントが {original_player_points} → {player_points} に！"
+
+    # 4. 最終的なポイントをセッションに保存
+    session['player_points'] = player_points
+    session['ai_points'] = ai_points
+
+    # 5. メッセージを組み立てる
+    final_message = f"ゲーム終了！ {game_result_message}{final_points_change_message}"
+    final_message += f"\n(あなたの最終合計: {player_total}, AIの最終合計: {ai_total})"
+    final_message += sp_effect_message
+
+    # 6. 完全決着メッセージ
+    if session['player_points'] <= 0:
+        final_message += "\nあなたのポイントが0になりました。ゲームオーバー！"
+    if session['ai_points'] <= 0:
+        final_message += "\nAIのポイントが0になりました。あなたの完全勝利！"
+
+    session["turn"] = "end" # ゲーム終了状態にする
+    return final_message
+# ここまで
 
 # --- 改良版 OmegaAI (ルールベース) 部 ---
 def calculate_expected_value(hand, deck):
@@ -653,6 +732,7 @@ except (FileNotFoundError, json.JSONDecodeError):
 if not q_table_loaded:
     print("INFO: 有効な学習済みQテーブルが見つからなかったため、空のQテーブルで開始します。")
 
+
 # --- API エンドポイント ---
 @app.route("/")
 def index():
@@ -809,139 +889,74 @@ def start_game():
 def hit():
     """プレイヤーがヒット"""
     print(f"--- HIT request received. Current turn in session: {session.get('turn')}")
-    if session.get("turn") == "player":
-        if not session["deck"]:
-            return jsonify({
-                "error": "No more cards in the deck.",
-                "player_points": session.get('player_points', INITIAL_POINTS),
-                "ai_points": session.get('ai_points', INITIAL_POINTS),
-                "player_sp_cards": session.get('player_sp_cards', {}),
-                "ai_sp_cards": session.get('ai_sp_cards', {}),
-            }), 400
 
-        session["player_consecutive_stands_for_ai_logic"] = 0 #プレイヤーがヒットしたので、連続スタンド回数をリセット
-        session["player_hand"].append(session["deck"].pop())
-        # session["player_consecutive_stand"] = 0
-        session['player_chose_stand_this_turn'] = False # ヒットしたのでスタンドではない
+    # --- ガード節1: プレイヤーのターンではない場合 ---
+    if session.get("turn") != "player":
+        # AIの手札を隠して「あなたのターンではありません」というメッセージと共に現在の状態を返す
+        current_ai_hand = session.get("ai_hand", [])
+        ai_hand_display = [0] + current_ai_hand[1:] if current_ai_hand else []
         
-        player_total = calculate_total(session["player_hand"])
-        message = f"あなたがヒットしました。合計: {player_total}" # ベースメッセージ
-
-        if player_total > BURST_LIMIT:
-            message += " (バースト!)" # バーストしても即ゲーム終了とはしない
-            
-            # ターンをAIに移す (ゲームは続く)
-            print(f"Hit successful or burst. Setting turn to 'ai'")
-            session["turn"] = "ai"
-
-            # ポイント更新 (Player Lose, AI Win)
-            player_current_points = session.get('player_points', INITIAL_POINTS)
-            ai_current_points = session.get('ai_points', INITIAL_POINTS)
-            session['player_points'] = player_current_points + POINT_CHANGE_ON_LOSE
-            session['ai_points'] = ai_current_points + POINT_CHANGE_ON_WIN
-
-            # プレイヤー宣言クリア (効果なし)
-            declared_card_id_player = session.pop('declared_sp_card', None)
-            if declared_card_id_player:
-                print(f"Player lost, Player's declared card '{declared_card_id_player}' effect not applied.")
-
-            # AI宣言効果適用
-            ai_declared_card_id = session.pop('ai_declared_sp_card', None)
-            sp_effect_message_ai = ""
-            if ai_declared_card_id and ai_declared_card_id in SP_CARDS_MASTER:
-                card_info = SP_CARDS_MASTER[ai_declared_card_id]
-                effect_value = card_info.get("effect_value", 0)
-                target = card_info.get("target", "opponent")
-                if target == "opponent": # プレイヤー対象
-                    if 'player_points' not in session: session['player_points'] = INITIAL_POINTS
-                    original_player_points = session['player_points']
-                    session['player_points'] += effect_value # プレイヤーポイント減少
-                    sp_effect_message_ai = f"\nさらにAIが宣言していた'{card_info.get('name', ai_declared_card_id)}'の効果発動！ あなたのポイント {original_player_points} → {session['player_points']}"
-                    print(f"AI won (Player burst), AI's declared card '{ai_declared_card_id}' effect applied to Player.")
-            elif ai_declared_card_id:
-                 print(f"AI won, but AI's declared card '{ai_declared_card_id}' invalid or effect not applicable.")
-
-            # メッセージ組み立て
-            message = f"あなたがヒットしました。合計: {player_total}\nあなたはバーストしました！AIの勝ち！ ({POINT_CHANGE_ON_LOSE}ポイント)"
-            message += sp_effect_message_ai # AIの効果メッセージ追加
-            game_over_message = ""
-            if session['player_points'] <= 0:
-                 game_over_message = "\nあなたのポイントが0になりました。ゲームオーバー！"
-            if session['ai_points'] <= 0: # AIポイント0チェックも念のため
-                 game_over_message += "\nAIのポイントが0になりました。あなたの完全勝利！"
-            message += game_over_message
-
-            # ★★★ ゲームオーバーなので、実際のAI手札をそのまま返す ★★★
-            ai_hand_to_return = session.get("ai_hand", []) # sessionから実際のai_handを取得
-
-            return jsonify({
-                "player_hand": session["player_hand"],
-                "ai_hand": ai_hand_to_return, # ★ 実際のAI手札 ★
-                "player_points": session['player_points'],
-                "ai_points": session['ai_points'],
-                "player_sp_cards": session.get('player_sp_cards', {}),
-                "ai_sp_cards": session.get('ai_sp_cards', {}),
-                "declared_sp_card": None,
-                "ai_declared_sp_card": session.get('ai_declared_sp_card'), # AI宣言はまだクリアしない
-                "game_over": False, # ★ゲームはまだ終わらない★
-                "message": message
-            })
-
-        else: # --- ヒット成功時 ---
-            print(f"Hit successful. Setting turn to 'ai'")
-            session["turn"] = "ai"
-
-            # --- ↓↓↓ レスポンス作成前に ai_hand_display を作成 ↓↓↓ ---
-            # ゲーム継続中なので、最初のカードを隠す
-            try:
-                if session.get("ai_hand") and len(session["ai_hand"]) >= 1:
-                     ai_hand_display = [0] + session["ai_hand"][1:]
-                else:
-                     ai_hand_display = []
-            except Exception as e:
-                print(f"Error creating ai_hand_display in hit (success): {e}")
-                ai_hand_display = []
-            # --- ↑↑↑ レスポンス作成前に ai_hand_display を作成 ↑↑↑ ---
-
-            return jsonify({
-                "player_hand": session["player_hand"],
-                "ai_hand": ai_hand_display, # ★ 隠したAI手札 ★
-                "player_points": session.get('player_points', INITIAL_POINTS),
-                "ai_points": session.get('ai_points', INITIAL_POINTS),
-                "player_sp_cards": session.get('player_sp_cards', {}),
-                "ai_sp_cards": session.get('ai_sp_cards', {}),
-                "declared_sp_card": session.get('declared_sp_card'),
-                "ai_declared_sp_card": session.get('ai_declared_sp_card'),
-                "game_over": False,
-                "message": message
-            })
-
-    else: # --- "Not your turn" の場合 ---
-        # --- ↓↓↓ レスポンス作成前に ai_hand_display を作成 ↓↓↓ ---
-        # ゲームは継続中とみなして、最初のカードを隠す
-        try:
-            current_ai_hand = session.get("ai_hand", [])
-            if current_ai_hand and len(current_ai_hand) >= 1:
-                 ai_hand_display = [0] + current_ai_hand[1:]
-            else:
-                 ai_hand_display = []
-        except Exception as e:
-            print(f"Error creating ai_hand_display in hit (not your turn): {e}")
-            ai_hand_display = []
-        # --- ↑↑↑ レスポンス作成前に ai_hand_display を作成 ↑↑↑ ---
-
+        print("INFO: Hit rejected, not player's turn.")
         return jsonify({
             "message": "Not your turn",
+            "player_hand": session.get("player_hand", []),
+            "ai_hand": ai_hand_display,
             "player_points": session.get('player_points', INITIAL_POINTS),
             "ai_points": session.get('ai_points', INITIAL_POINTS),
             "player_sp_cards": session.get('player_sp_cards', {}),
             "ai_sp_cards": session.get('ai_sp_cards', {}),
-            "player_hand": session.get("player_hand", []),
-            "ai_hand": ai_hand_display, # ★ 隠したAI手札 ★
             "declared_sp_card": session.get('declared_sp_card'),
             "ai_declared_sp_card": session.get('ai_declared_sp_card'),
-            # "game_over": False, # 返さなくても良いかも
+            "game_over": session.get("turn") == "end" # ゲームが終了している可能性も考慮
         })
+
+    # --- ガード節2: デッキが空の場合 ---
+    if not session.get("deck"):
+        print("ERROR: Hit failed, deck is empty.")
+        return jsonify({
+            "error": "No more cards in the deck.",
+            "player_points": session.get('player_points', INITIAL_POINTS),
+            "ai_points": session.get('ai_points', INITIAL_POINTS),
+            "player_sp_cards": session.get('player_sp_cards', {}),
+            "ai_sp_cards": session.get('ai_sp_cards', {}),
+        }), 400
+
+    # --- メインのヒット処理 ---
+    
+    # プレイヤーがヒットしたことを記録
+    session["player_consecutive_stands_for_ai_logic"] = 0 
+    session['player_chose_stand_this_turn'] = False
+    
+    # デッキからカードを引いて手札に加える
+    session["player_hand"].append(session["deck"].pop())
+    
+    # メッセージを組み立てる
+    player_total = calculate_total(session["player_hand"])
+    message = f"あなたがヒットしました。合計: {player_total}"
+
+    # バーストした場合のみ、メッセージに追記
+    if player_total > BURST_LIMIT:
+        message += " (バースト！)"
+        print(f"INFO: Player burst with total: {player_total}")
+    
+    # ターンをAIに移す (バースト有無に関わらず共通)
+    session["turn"] = "ai"
+    print(f"INFO: Turn changed to 'ai'.")
+
+    # レスポンスを返す (バースト有無に関わらず共通)
+    ai_hand_display = [0] + session["ai_hand"][1:] if session.get("ai_hand") else []
+    return jsonify({
+        "player_hand": session["player_hand"],
+        "ai_hand": ai_hand_display,
+        "player_points": session.get('player_points', INITIAL_POINTS),
+        "ai_points": session.get('ai_points', INITIAL_POINTS),
+        "player_sp_cards": session.get('player_sp_cards', {}),
+        "ai_sp_cards": session.get('ai_sp_cards', {}),
+        "declared_sp_card": session.get('declared_sp_card'),
+        "ai_declared_sp_card": session.get('ai_declared_sp_card'),
+        "game_over": False, # ヒット直後にゲームオーバーになることはない
+        "message": message
+    })
 
 
 @app.route("/stand", methods=["POST"])
@@ -1014,88 +1029,55 @@ def stand():
 def ai_turn():
     """AIのターン"""
     print(f"--- AI_TURN request received. Current turn in session: {session.get('turn')}")
-    if session.get("turn") != "ai":
-        # AIのターンではない場合、現在のゲーム状態をそのまま返す
-        ai_hand_to_return = []
-        is_game_over = session.get("turn") == "end"
-        if is_game_over :
-            ai_hand_to_return = session.get("ai_hand", [])
-        else:
-            try:
-                ai_hand_to_return = [0] + session.get("ai_hand", [])[1:] if session.get("ai_hand") and len(session.get("ai_hand", [])) >= 1 else session.get("ai_hand", [])
-            except: # pylint: disable=bare-except
-                ai_hand_to_return = session.get("ai_hand", [])
 
+    # --- ガード節: AIのターンではない場合 ---
+    if session.get("turn") != "ai":
+        is_game_over = session.get("turn") == "end"
+        ai_hand_to_return = session.get("ai_hand", [])
+        if not is_game_over:
+            ai_hand_to_return = [0] + ai_hand_to_return[1:] if ai_hand_to_return else []
+        
         return jsonify({
             "message": "Not AI turn" if not is_game_over else "Game already over",
-            "player_points": session.get('player_points', INITIAL_POINTS),
-            "ai_points": session.get('ai_points', INITIAL_POINTS),
-            "player_sp_cards": session.get('player_sp_cards', {}),
-            "ai_sp_cards": session.get('ai_sp_cards', {}),
             "player_hand": session.get("player_hand", []),
             "ai_hand": ai_hand_to_return,
+            "player_points": session.get('player_points'),
+            "ai_points": session.get('ai_points'),
+            "player_sp_cards": session.get('player_sp_cards', {}),
+            "ai_sp_cards": session.get('ai_sp_cards', {}),
             "declared_sp_card": session.get('declared_sp_card'),
             "ai_declared_sp_card": session.get('ai_declared_sp_card'),
-            "game_over": is_game_over # ゲームオーバー状態を正しく返す
+            "game_over": is_game_over
         })
 
-    
-    
-    # メッセージ変数の初期化 (最重要) 
-    # このリクエストで生成するメッセージを格納する変数を、必ずここで初期化する。
-    sp_message_part = ""  # SPカード関連のメッセージ用
-    action_message_part = "" # ヒット/スタンド行動関連のメッセージ用
-    
-    # --- AIのターン開始時の準備 ---
-    ai_hand = session.get("ai_hand", [])
+    # --- ターン開始時の準備 ---
     player_hand = session.get("player_hand", [])
+    ai_hand = session.get("ai_hand", [])
     deck = session.get("deck", [])
-    ai_sp_cards = session.get('ai_sp_cards', {}).copy() # 変更する可能性があるのでコピーを操作
-
-    sp_related_message_for_ai = "" # AIのSPカード使用に関するメッセージ
-    used_sp_card_this_turn_by_ai = False # このターンでAIがSPカードを使ったか
-
+    ai_sp_cards = session.get('ai_sp_cards', {}).copy()
+    
     # --- 1. AIによる即時発動系SPカード「手札戻し」の使用判断 ---
     card_id_return = "sp_return_last_card"
-    ai_total_before_any_action = calculate_total(ai_hand) # 現状のAI合計
-
-    if ai_sp_cards.get(card_id_return, 0) > 0 and \
-       ai_total_before_any_action > BURST_LIMIT and \
-       len(ai_hand) > 2:
-        
-        # 「手札戻し」を使用する場合、これがこのターンの唯一のアクションとなる
-        print(f"AI is using INSTANT SP card: {card_id_return}")
+    if ai_sp_cards.get(card_id_return, 0) > 0 and calculate_total(ai_hand) > BURST_LIMIT and len(ai_hand) > 2:
+        print(f"INFO: AI is using INSTANT SP card: {card_id_return}")
         ai_sp_cards[card_id_return] -= 1
-        
         returned_card = ai_hand.pop()
         deck.append(returned_card)
         random.shuffle(deck)
         
-        ai_total_after_return = calculate_total(ai_hand)
         card_name_return = SP_CARDS_MASTER.get(card_id_return, {}).get('name', card_id_return)
+        message = f"AIは '{card_name_return}' を使用！ 最後に引いたカード ({returned_card}) を山札に戻しました。あなたのターンです。"
         
-        instant_sp_message = f"\nAIは '{card_name_return}' を使用！ 最後に引いたカード ({returned_card}) を山札に戻しました。"
-        instant_sp_message += f" AIの合計は **非表示** になりました。" # 合計は隠す方針
-        instant_sp_message += " あなたのターンです。"
-        
-        
-        # セッション内の情報を更新
         session['ai_sp_cards'] = ai_sp_cards
         session["deck"] = deck
         session["ai_hand"] = ai_hand
-        session["turn"] = "player" # ターンをプレイヤーへ
-        session.modified = True
+        session["turn"] = "player"
 
-        # フロントエンドに返すレスポンスを作成し、ここで処理を終了
-        try:
-            ai_hand_display = [0] + session["ai_hand"][1:] if session.get("ai_hand") and len(session["ai_hand"]) >= 1 else session.get("ai_hand", [])
-        except Exception as e:
-            ai_hand_display = session.get("ai_hand", [])
-
+        ai_hand_display = [0] + session["ai_hand"][1:] if session.get("ai_hand") else []
         return jsonify({
-            "message": instant_sp_message.strip(),
+            "message": message,
             "player_hand": player_hand,
-            "ai_hand": ai_hand_display, # 更新された手札（表示用）
+            "ai_hand": ai_hand_display,
             "player_points": session.get('player_points'),
             "ai_points": session.get('ai_points'),
             "player_sp_cards": session.get('player_sp_cards'),
@@ -1105,150 +1087,87 @@ def ai_turn():
             "game_over": False
         })
     
-
-    sp_declare_message = "" # このターンで宣言するSPカードのメッセージ
-
     # --- 2. AIによる宣言系SPカードの使用判断 ---
-    # (即時発動系を使っていなくても、かつ誰も宣言していなければ検討)
+    sp_declare_message = ""
+    ai_total = calculate_total(ai_hand)
     if not session.get('declared_sp_card') and not session.get('ai_declared_sp_card'):
-        
-        card_id_declare_type = "sp_minus_3" # 例: 宣言系カード
+        card_id_declare_type = "sp_minus_3"
         player_open_card = player_hand[0] if player_hand else 0
-        
-        # (宣言系SPカードの使用条件ロジック - 例: ai_total >= 18 ...)
-        if ai_total_before_any_action >= 18 and player_open_card <= 7 and ai_sp_cards.get(card_id_declare_type, 0) > 0:
+        if ai_total >= 18 and player_open_card <= 7 and ai_sp_cards.get(card_id_declare_type, 0) > 0:
             ai_sp_cards[card_id_declare_type] -= 1
-            session['ai_declared_sp_card'] = card_id_declare_type # 宣言状態を記録
+            session['ai_declared_sp_card'] = card_id_declare_type
             card_name_declare = SP_CARDS_MASTER.get(card_id_declare_type, {}).get('name', card_id_declare_type)
             sp_declare_message = f"\nAIは '{card_name_declare}' の使用を宣言しました！"
-            print(f"AI declared '{card_name_declare}'.")
+            print(f"INFO: AI declared '{card_name_declare}'.")
+            session['ai_sp_cards'] = ai_sp_cards # 消費したのでセッションを更新
 
     # --- 3. AIのヒット/スタンド行動選択 ---
-    current_ai_total = calculate_total(session["ai_hand"]) # SP使用後の最終的なAI合計
-    action_by_ai = None # AIの行動 (ヒット or スタンド)
-
-    # プレイヤー牽制ルール (強制スタンド)
-    player_current_total = calculate_total(player_hand)
+    player_total = calculate_total(player_hand)
     player_consecutive_stands = session.get("player_consecutive_stands_for_ai_logic", 0)
-    if current_ai_total > player_current_total and player_consecutive_stands >= 2:
+    if ai_total > player_total and player_consecutive_stands >= 2:
         action_by_ai = "stand"
-        print(f"INFO: AI forced to stand by player牽制rule. AI total: {current_ai_total}, Player total: {player_current_total}, Player cons. stands: {player_consecutive_stands}")
+        print(f"INFO: AI forced to stand by player牽制rule.")
     else:
-        # 通常のQ学習などによる行動選択
         player_open_card_for_q = player_hand[0] if player_hand else 0
-        current_deck_state = session.get("deck", []) # 最新のデッキ状態
-        state_for_q_agent = agent.get_state(current_ai_total, player_open_card_for_q, current_deck_state)
-        action_by_ai = agent.choose_action(state_for_q_agent, current_ai_total, is_training=False)
-    
-    action_message_part = "" # AIのヒット/スタンド行動に関するメッセージ
+        state_for_q_agent = agent.get_state(ai_total, player_open_card_for_q, deck)
+        action_by_ai = agent.choose_action(state_for_q_agent, ai_total, is_training=False)
+
+    # --- 4. AIの行動実行と、それに伴う状態遷移 ---
+    action_message = ""
+    is_game_over = False
 
     if action_by_ai == "hit":
-        session["both_consecutive_stands"] = 0 # AIがヒットしたら両者連続スタンドはリセット
-        if not session.get("deck"):
-            action_message_part = "AI: ヒット。"
-            action_message_part += " しかしデッキにカードがありませんでした。"
+        session["both_consecutive_stands"] = 0
+        if not deck:
+            action_message = "AI: ヒット。しかしデッキにカードがありませんでした。"
         else:
-            session["ai_hand"].append(session["deck"].pop())
-            # ヒット後の合計値を正しく計算
-            new_ai_total_after_hit = calculate_total(session["ai_hand"])
-            action_message_part = "AI: ヒット。"
-            if new_ai_total_after_hit > BURST_LIMIT:
-                action_message_part += " (バースト!)"
-        session["turn"] = "player" # ターンをプレイヤーへ
+            session["ai_hand"].append(deck.pop())
+            new_ai_total = calculate_total(session["ai_hand"])
+            action_message = "AI: ヒット。"
+            if new_ai_total > BURST_LIMIT:
+                action_message += " (バースト！)"
+                print(f"INFO: AI burst with total: {new_ai_total}")
+        session["turn"] = "player"
 
-    else: # AIがスタンドした場合 (action_by_ai == "stand")
-        action_message_part = "AI: スタンド。"
-        
+    else: # action_by_ai == "stand"
+        action_message = "AI: スタンド。"
         player_stood_last_turn = session.get('player_chose_stand_this_turn', False)
         if player_stood_last_turn:
             session["both_consecutive_stands"] = session.get("both_consecutive_stands", 0) + 1
         else:
             session["both_consecutive_stands"] = 0
         session['player_chose_stand_this_turn'] = False
-
+        
+        # 決着判定
         if session.get("both_consecutive_stands", 0) >= 3:
-            print(f"Game ends: Both players stood 3 consecutive times. Setting turn to 'end'")
-            session["turn"] = "end"
-            
-            player_total_final = calculate_total(player_hand)
-            ai_total_final = current_ai_total
-            result = judge(player_total_final, ai_total_final)
-
-            player_points = session.get('player_points', INITIAL_POINTS)
-            ai_points = session.get('ai_points', INITIAL_POINTS)
-            game_result_message = ""
-            final_points_change_message = ""
-
-            if result == 1:
-                player_points += POINT_CHANGE_ON_WIN; ai_points += POINT_CHANGE_ON_LOSE
-                game_result_message = "あなたの勝ち！"
-                final_points_change_message = f" ({POINT_CHANGE_ON_WIN:+d}ポイント)"
-            elif result == -1:
-                player_points += POINT_CHANGE_ON_LOSE; ai_points += POINT_CHANGE_ON_WIN
-                game_result_message = "AIの勝ち！"
-                final_points_change_message = f" ({POINT_CHANGE_ON_LOSE:+d}ポイント)"
-            else:
-                game_result_message = "引き分け！ (ポイント変動なし)"
-            
-            session['player_points'] = player_points
-            session['ai_points'] = ai_points
-            
-            sp_effect_execution_message = ""
-            declared_card_player_popped = session.pop('declared_sp_card', None)
-            if result == 1 and declared_card_player_popped and declared_card_player_popped in SP_CARDS_MASTER:
-                card_info = SP_CARDS_MASTER[declared_card_player_popped]
-                sp_effect_execution_message += f"\nあなたが宣言した'{card_info.get('name')}'の効果発動！"
-
-            declared_card_ai_popped = session.pop('ai_declared_sp_card', None)
-            if result == -1 and declared_card_ai_popped and declared_card_ai_popped in SP_CARDS_MASTER:
-                card_info = SP_CARDS_MASTER[declared_card_ai_popped]
-                sp_effect_execution_message += f"\nAIが宣言した'{card_info.get('name')}'の効果発動！"
-
-            action_message_part += f"\nゲーム終了！ {game_result_message}{final_points_change_message}"
-            action_message_part += f"\n(あなたの最終合計: {player_total_final}, AIの最終合計: {ai_total_final})"
-            action_message_part += sp_effect_execution_message
-            
-            if session['player_points'] <= 0: action_message_part += "\nあなたのポイントが0になりました。ゲームオーバー！"
-            if session['ai_points'] <= 0: action_message_part += "\nAIのポイントが0になりました。あなたの完全勝利！"
-
-        else: # AIスタンドしたが、まだゲームは続く場合
-            print(f"AI stand continue. Setting turn to 'player'")
+            print(f"INFO: Game ends, both stood 3 consecutive times.")
+            # 新しい決着処理関数を呼び出す
+            action_message = _finalize_round() # ここでメッセージが上書きされる
+            is_game_over = True
+        else:
             session["turn"] = "player"
 
-    # --- レスポンスの組み立て ---
-    # ★★★ sp_declare_message と action_message_part を使用 ★★★
-    final_message_to_front = action_message_part + sp_declare_message
-    if session.get("turn") == "player":
-         final_message_to_front += " あなたのターンです。"
+    # --- 5. レスポンスの組み立て ---
+    final_message = action_message + sp_declare_message
+    if not is_game_over:
+        final_message += " あなたのターンです。"
 
-    # AIの手札表示制御
-    ai_hand_for_display = []
-    if session.get("turn") == "end": # ゲーム終了時は全て表示
-        ai_hand_for_display = session.get("ai_hand", [])
-    else: # ゲーム継続中は隠す
-        try:
-            current_ai_real_hand = session.get("ai_hand", [])
-            if current_ai_real_hand and len(current_ai_real_hand) >= 1:
-                ai_hand_for_display = [0] + current_ai_real_hand[1:]
-            else:
-                ai_hand_for_display = current_ai_real_hand
-        except Exception as e: # pylint: disable=broad-except
-            print(f"Error creating ai_hand_display in ai_turn (final response): {e}")
-            ai_hand_for_display = session.get("ai_hand", [])
+    ai_hand_to_return = session.get("ai_hand", [])
+    if not is_game_over:
+        ai_hand_to_return = [0] + ai_hand_to_return[1:] if ai_hand_to_return else []
 
     session.modified = True
-    
     return jsonify({
-        "message": final_message_to_front.strip(),
-        "player_hand": session.get("player_hand", []),
-        "ai_hand": ai_hand_for_display,
-        "player_points": session.get('player_points', INITIAL_POINTS),
-        "ai_points": session.get('ai_points', INITIAL_POINTS),
-        "player_sp_cards": session.get('player_sp_cards', {}),
-        "ai_sp_cards": session.get('ai_sp_cards', {}),
-        "declared_sp_card": session.get('declared_sp_card', None), # ゲーム終了時はpopされているはず
-        "ai_declared_sp_card": session.get('ai_declared_sp_card', None), # ゲーム終了時はpopされているはず
-        "game_over": session.get("turn") == "end",
+        "message": final_message.strip(),
+        "player_hand": player_hand,
+        "ai_hand": ai_hand_to_return,
+        "player_points": session.get('player_points'),
+        "ai_points": session.get('ai_points'),
+        "player_sp_cards": session.get('player_sp_cards'),
+        "ai_sp_cards": session.get('ai_sp_cards'),
+        "declared_sp_card": session.get('declared_sp_card'),
+        "ai_declared_sp_card": session.get('ai_declared_sp_card'),
+        "game_over": is_game_over
     })
 
 
@@ -1376,10 +1295,6 @@ def train2_route():
         "simulation_results": simulation_results
     })
 
-@app.route('/shutdown', methods=['POST'])
-def shutdown():
-    sys.exit(0)
-
 
 @app.route('/reset_all', methods=['POST'])
 def reset_all():
@@ -1403,6 +1318,6 @@ def reset_all():
     return jsonify({"message": "セッションがリセットされました。"})
 
 
-#   最後
+# 最後
 if __name__ == "__main__":
     app.run(debug=True)
