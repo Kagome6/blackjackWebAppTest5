@@ -403,6 +403,10 @@ async function handleUseSpCard(event) {
             throw new Error(data.error || `サーバーエラー: ${response.status}`);
         }
 
+        // エラー復帰処理のために、成功した時点のSPカード状態を保存する
+        sessionStorage.setItem('last_player_sp_cards', JSON.stringify(data.player_sp_cards));
+        sessionStorage.setItem('last_declared_sp_card', data.declared_sp_card || '');
+
         // --- ボタン状態の更新 (API応答後) ---
         // 即時発動系カードの場合、プレイヤーのターンが続くことが多い
         // 宣言系カードの場合も、宣言後にプレイヤーが続けて行動できる
@@ -436,22 +440,42 @@ async function handleUseSpCard(event) {
         updateAIDeclaredCardDisplay(data.ai_declared_sp_card || null);        
 
     } catch (error) {
+        // ------------------- ここから修正版 -------------------
         console.error("Error using SP card:", error);
+        
+        // 1. ユーザーにエラーメッセージを通知
+        // error.message には fetch('/use_sp_card') の try ブロックで投げられた
+        // サーバーからの具体的なエラー内容 (data.error) が入る
         appendMessage(`SPカード使用エラー: ${error.message}`);
-        // エラー時は操作可能に戻す (状況に応じてより丁寧な復帰処理も検討)
-        if (!document.getElementById("end-game") || document.getElementById("end-game").style.display === "none"){
+
+        // 2. ゲームが終了していない場合のみ、操作ボタンを有効に戻す
+        //    (ゲーム終了画面が表示されている場合は、ボタンは無効のままにする)
+        const isGameScreenActive = !document.getElementById("end-game") || document.getElementById("end-game").style.display === "none";
+        
+        if (isGameScreenActive) {
             hitButton.disabled = false;
             standButton.disabled = false;
         }
-        // SPカードボタンの状態も元に戻すか、再取得して更新するのが望ましい
-        // ここでは一旦、全てのSPカードボタンを有効に戻す（枚数が0のものはupdateSpCardsDisplayで再度無効化される）
-        updateSpCardsDisplay(
-            JSON.parse(sessionStorage.getItem('last_player_sp_cards') || '{}'), // sessionStorage等で直前の状態を保持していれば
-            sessionStorage.getItem('last_declared_sp_card') || null
-        ); 
-        // もし直前の状態を保持していない場合は、単純に全ボタンを有効化するしかない
-        // document.querySelectorAll('.use-sp-button').forEach(btn => btn.disabled = false); 
-        // または、サーバーから最新のSPカード情報を取得して表示を更新する関数を呼ぶ
+
+        // 3. SPカードの表示状態をエラー発生前の状態に復元する
+        //    (この処理は、API通信が成功した際にsessionStorageに最新状態を保存していることが前提)
+        try {
+            const lastPlayerSpCards = JSON.parse(sessionStorage.getItem('last_player_sp_cards') || '{}');
+            const lastDeclaredCard = sessionStorage.getItem('last_declared_sp_card') || null;
+            
+            // SPカード表示更新関数を呼び出し、UIをエラー前の状態に戻す
+            // これにより、他のSPカードボタンも適切に有効/無効化される
+            updateSpCardsDisplay(lastPlayerSpCards, lastDeclaredCard);
+
+        } catch (storageError) {
+            console.error("Failed to restore SP cards display from sessionStorage:", storageError);
+            // sessionStorageからの復元に失敗した場合のフォールバック
+            // (最悪のケースとして、全てのSPボタンを一旦有効にするなど)
+            document.querySelectorAll('.use-sp-button').forEach(btn => {
+                if(isGameScreenActive) btn.disabled = false;
+            });
+        }
+
     }
 }
 
@@ -603,7 +627,7 @@ hitButton.addEventListener("click", async () => {
         }
     } catch (error) {
         console.error("Error in hit:", error);
-        appendMessage("ヒット処理中にエラーが発生しました。");
+        appendMessage("山札にもうカードがありません。もしくはエラー？");
         // エラー時は操作可能に戻す
         hitButton.disabled = false;
         standButton.disabled = false;
