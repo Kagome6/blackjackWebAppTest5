@@ -126,50 +126,66 @@ def _finalize_round():
     # 1. 勝敗判定
     result = judge(player_total, ai_total) # 1: Player win, -1: AI win, 0: Draw
 
-    # 2. 基本的なポイント増減
+    # 2. ポイントとメッセージの初期化
     player_points = session.get('player_points', INITIAL_POINTS)
     ai_points = session.get('ai_points', INITIAL_POINTS)
     
     game_result_message = ""
     final_points_change_message = ""
+    sp_effect_message = ""
+
+    # 先に宣言されていたカードのIDを取得（まだセッションからは削除しない）
+    declared_card_player = session.get('declared_sp_card')
+    declared_card_ai = session.get('ai_declared_sp_card')
+    
+    # 3. 勝敗に応じたポイント変動とSPカード効果の適用
+    # このセクションで、通常のポイント変動とSPカード効果のどちらを適用するかを制御する
 
     if result == 1: # プレイヤーの勝ち
         player_points += POINT_CHANGE_ON_WIN
-        ai_points += POINT_CHANGE_ON_LOSE
         game_result_message = "あなたの勝ち！"
-        final_points_change_message = f" ({POINT_CHANGE_ON_WIN:+d}ポイント)"
+
+        # プレイヤーがSPカードを宣言しており、その効果が発動する場合
+        if declared_card_player and declared_card_player in SP_CARDS_MASTER:
+            session.pop('declared_sp_card', None) # 効果を適用するのでセッションから削除
+            card_info = SP_CARDS_MASTER[declared_card_player]
+            effect_value = card_info.get("effect_value", 0)
+            target = card_info.get("target", "opponent")
+
+            if target == "opponent": # 対象はAI
+                original_ai_points = ai_points
+                ai_points += effect_value # ★SPカードの効果値(-3)を適用
+                sp_effect_message = f"\nあなたが宣言した'{card_info.get('name')}'の効果発動！ AIのポイントが {original_ai_points} → {ai_points} に！"
+        else:
+            # SPカードが使用されなかった場合、通常のポイント変動を適用
+            ai_points += POINT_CHANGE_ON_LOSE # ★通常の敗北(-1)を適用
+            final_points_change_message = f" ({POINT_CHANGE_ON_WIN:+d}ポイント)"
+
     elif result == -1: # AIの勝ち
-        player_points += POINT_CHANGE_ON_LOSE
         ai_points += POINT_CHANGE_ON_WIN
         game_result_message = "AIの勝ち！"
-        final_points_change_message = f" ({POINT_CHANGE_ON_LOSE:+d}ポイント)"
+        
+        # AIがSPカードを宣言しており、その効果が発動する場合
+        if declared_card_ai and declared_card_ai in SP_CARDS_MASTER:
+            session.pop('ai_declared_sp_card', None) # 効果を適用するのでセッションから削除
+            card_info = SP_CARDS_MASTER[declared_card_ai]
+            effect_value = card_info.get("effect_value", 0)
+            target = card_info.get("target", "opponent")
+
+            if target == "opponent": # 対象はプレイヤー
+                original_player_points = player_points
+                player_points += effect_value # ★SPカードの効果値(-3)を適用
+                sp_effect_message = f"\nAIが宣言した'{card_info.get('name')}'の効果発動！ あなたのポイントが {original_player_points} → {player_points} に！"
+        else:
+            # SPカードが使用されなかった場合、通常のポイント変動を適用
+            player_points += POINT_CHANGE_ON_LOSE # ★通常の敗北(-1)を適用
+            final_points_change_message = f" ({POINT_CHANGE_ON_LOSE:+d}ポイント)"
+
     else: # 引き分け
         game_result_message = "引き分け！ (ポイント変動なし)"
-
-    # 3. SPカード効果の適用
-    sp_effect_message = ""
-    
-    # プレイヤー勝利時に、プレイヤーが宣言していたカードの効果を適用
-    declared_card_player = session.pop('declared_sp_card', None)
-    if result == 1 and declared_card_player and declared_card_player in SP_CARDS_MASTER:
-        card_info = SP_CARDS_MASTER[declared_card_player]
-        effect_value = card_info.get("effect_value", 0)
-        target = card_info.get("target", "opponent")
-        if target == "opponent": # 対象はAI
-            original_ai_points = ai_points
-            ai_points += effect_value # ★AIのポイントを実際に変更★
-            sp_effect_message += f"\nあなたが宣言した'{card_info.get('name')}'の効果発動！ AIのポイントが {original_ai_points} → {ai_points} に！"
-
-    # AI勝利時に、AIが宣言していたカードの効果を適用
-    declared_card_ai = session.pop('ai_declared_sp_card', None)
-    if result == -1 and declared_card_ai and declared_card_ai in SP_CARDS_MASTER:
-        card_info = SP_CARDS_MASTER[declared_card_ai]
-        effect_value = card_info.get("effect_value", 0)
-        target = card_info.get("target", "opponent")
-        if target == "opponent": # 対象はプレイヤー
-            original_player_points = player_points
-            player_points += effect_value # ★プレイヤーのポイントを実際に変更★
-            sp_effect_message += f"\nAIが宣言した'{card_info.get('name')}'の効果発動！ あなたのポイントが {original_player_points} → {player_points} に！"
+        # 引き分けの場合はSPカードは発動しないルールとし、宣言済みカードをセッションからクリアする
+        session.pop('declared_sp_card', None)
+        session.pop('ai_declared_sp_card', None)
 
     # 4. 最終的なポイントをセッションに保存
     session['player_points'] = player_points
@@ -188,7 +204,7 @@ def _finalize_round():
 
     session["turn"] = "end" # ゲーム終了状態にする
     return final_message
-# ここまで
+
 
 # --- 改良版 OmegaAI (ルールベース) 部 ---
 def calculate_expected_value(hand, deck):
@@ -945,6 +961,9 @@ def hit():
 
     # レスポンスを返す (バースト有無に関わらず共通)
     ai_hand_display = [0] + session["ai_hand"][1:] if session.get("ai_hand") else []
+
+    session.modified = True
+    
     return jsonify({
         "player_hand": session["player_hand"],
         "ai_hand": ai_hand_display,
