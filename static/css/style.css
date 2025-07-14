@@ -50,7 +50,7 @@
     left: 50%;
     transform: translateX(-50%);
     width: 80%;
-    max-height: 80px;
+    max-height: 120px;
     overflow-y: auto;
     font-size: 20px;
     background: rgba(255,255,255,0.8);
@@ -103,11 +103,29 @@
     max-width: 600px;
 }
 
-/* 手札エリア */
-#player-hand {
-    /* 手札カードが増えたときに左から右に並ぶように */
-    display: flex;
-    flex-wrap: wrap; /* カードが多すぎたら折り返す */
+/* 手札表示エリアのスタイル */
+.hand {
+    display: flex;          /* 子要素(カード)を横並びにする */
+    flex-wrap: nowrap;      /* カードの折り返しを禁止する */
+    overflow-x: auto;       /* 横方向にはみ出た場合にスクロールバーを表示 */
+    overflow-y: hidden;     /* 縦方向の意図しないスクロールを防止 */
+    padding-bottom: 10px;   /* スクロールバーとカードが重ならないように余白を追加 */
+    min-height: 200px;      /* カードの高さ(180px) + α の最小高さを確保 */
+}
+
+/* スクロールバーの見た目を少し控えめにする (任意) */
+.hand::-webkit-scrollbar {
+    height: 8px;
+}
+.hand::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+.hand::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+.hand::-webkit-scrollbar-thumb:hover {
+    background: #555;
 }
 
 
@@ -364,7 +382,7 @@
 }
 
 input:checked + .slider {
-    background-color: #2d200c;
+    background-color: #261909;
 }
 
 input:checked + .slider:before {
@@ -423,7 +441,7 @@ body.dark-mode .sp-card-item button.use-sp-button {
 
 
 body.dark-mode #buttons {
-    background-color: #2d200c;
+    background-color: #261909;
     padding: 20px 10px;
     border-radius: 10px;
 }
@@ -466,6 +484,6 @@ body.dark-mode #stand-button img {
     transition: transform 0.2s ease-out;
 }
 
-body.dark-mode #play-button img {
+body.dark-mode #play-button img {  
     transform: scale(1.4); /* 拡大率140% */
 }
